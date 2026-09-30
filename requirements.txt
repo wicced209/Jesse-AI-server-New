@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+requests
+pynacl
+python-dotenv
+cryptography
+numpy
+pydantic
