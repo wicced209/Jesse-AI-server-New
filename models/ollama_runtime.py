@@ -16,7 +16,7 @@ GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 GEMINI_URL     = "https://generativelanguage.googleapis.com/v1beta/interactions"
 GROQ_API_KEY  = os.environ.get("GROQ_API_KEY", "")
 GROQ_URL      = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL    = os.environ.get("GROQ_MODEL", "llama3-8b-8192")
+GROQ_MODEL    = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 JESSE_SYSTEM = """You are Jesse AI — the internal sovereign language model of CRSMCPAI Alpha.
 Owner / Superadmin: SLMK Jesse Martinez Junior.
