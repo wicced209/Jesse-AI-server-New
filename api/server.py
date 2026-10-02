@@ -41,38 +41,27 @@ class CommandRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    status = dominion.full_status()
-    return f"""<!DOCTYPE html>
-<html><head><title>Jesse AI</title>
+    return """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jesse AI Terminal</title>
 <style>
-body{{background:#0a0a0a;color:#fff;font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:0 auto;}}
-h1{{color:#C9A84C;font-size:2em;}} h2{{color:#C9A84C;font-size:1.2em;margin-top:30px;}}
-.green{{color:#2ecc71;font-weight:bold;}} .gold{{color:#C9A84C;}}
-pre{{background:#1a1a1a;padding:20px;border-radius:8px;color:#ccc;overflow-x:auto;font-size:13px;}}
-.badge{{display:inline-block;background:#1a1a1a;border:1px solid #C9A84C;border-radius:4px;padding:4px 10px;margin:4px;font-size:12px;}}
-</style></head><body>
-<h1>⚡ Jesse AI</h1>
-<p class="gold">CRSMCPAI Alpha V2 — Sovereign Stack</p>
-<p class="green">● SOVEREIGN — SECURE — ACTIVE</p>
-<p>Owner: <strong>{SOVEREIGN_OWNER}</strong></p>
-<p>Version: {VERSION} | Stack: {status.get('version','')}</p>
-<h2>Modules</h2>
-{''.join(f'<span class="badge">{m}</span>' for m in list(ARCHITECTURE_REGISTRY.keys())[:20])}
-<h2>API Endpoints</h2>
-<pre>GET  /health       — System health
-GET  /handshake    — Sovereign identity verification
-GET  /status       — Full stack status
-GET  /audit        — Quantum audit
-POST /command      — Execute command through CRSMCPAI Alpha
-GET  /ledger       — Immutable ledger
-GET  /log          — System event log
-GET  /docs         — Interactive API docs</pre>
-<h2>Execute a Command</h2>
-<pre>POST /command
-{{"command": "Jesse AI execute full status report", "user": "jesse_martinez_jr"}}</pre>
-</body></html>"""
-
-
+:root{color-scheme:dark;--bg:#080b0f;--panel:#10161d;--line:#263442;--text:#d9e2ea;--muted:#7f92a3;--green:#54e38e;--gold:#d7b45a;--red:#ff7777}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px ui-monospace,SFMono-Regular,Menlo,monospace;min-height:100vh}
+main{max-width:980px;margin:0 auto;padding:20px}.top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:8px 0 14px}.brand{color:var(--green);font-weight:700}.status{color:var(--muted);font-size:12px}.status b{color:var(--green)}
+.terminal{margin-top:18px;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden;box-shadow:0 12px 50px #0008}.bar{padding:9px 13px;color:var(--muted);border-bottom:1px solid var(--line);font-size:12px}.out{min-height:360px;max-height:62vh;overflow:auto;padding:16px;white-space:pre-wrap;line-height:1.5}.prompt{color:var(--green)}.err{color:var(--red)}
+.form{display:flex;border-top:1px solid var(--line);padding:12px;gap:10px}.form span{color:var(--green);padding-top:11px}.form input{flex:1;background:#080b0f;color:var(--text);border:1px solid var(--line);border-radius:5px;padding:10px;font:inherit}.form button,.quick button{background:#18232d;color:var(--text);border:1px solid var(--line);border-radius:5px;padding:9px 12px;font:inherit;cursor:pointer}.form button:hover,.quick button:hover{border-color:var(--gold);color:var(--gold)}
+.quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.hint{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.5}@media(max-width:600px){main{padding:12px}.form{flex-wrap:wrap}.form input{min-width:70%}.form button{flex:1}.out{min-height:300px}}
+</style></head><body><main><div class="top"><div class="brand">JESSE_AI :: CRSMCPAI_ALPHA</div><div class="status">● <b>ONLINE</b></div></div>
+<div class="terminal"><div class="bar">terminal session · Dominion stack connected · type <b>help</b> for commands</div><div id="out" class="out"></div><form id="form" class="form"><span>jesse@alpha:~$</span><input id="cmd" autocomplete="off" autofocus aria-label="Command"><button type="submit">EXECUTE</button></form></div>
+<div class="quick"><button data-cmd="status">status</button><button data-cmd="handshake">handshake</button><button data-cmd="audit">audit</button><button data-cmd="ledger">ledger</button><button data-cmd="help">help</button></div>
+<div class="hint">Commands are sent to <code>POST /command</code>. Use the API docs at <a href="/docs" style="color:var(--gold)">/docs</a> for the full interface.</div></main>
+<script>
+const out=document.getElementById('out'),form=document.getElementById('form'),input=document.getElementById('cmd');
+function print(x,cls=''){const d=document.createElement('div');d.className=cls;d.textContent=x;out.appendChild(d);out.scrollTop=out.scrollHeight}
+function local(c){if(c==='help')return 'Available commands:\n  status       full Dominion status\n  handshake    verify CRSMCPAI Alpha identity\n  audit        quantum audit\n  ledger       recent ledger blocks\n  clear        clear terminal\n  any text     execute through CRSMCPAI Alpha'; if(c==='clear'){out.innerHTML='';return ''} return null}
+async function run(c){c=c.trim();if(!c)return;print('jesse@alpha:~$ '+c,'prompt');const l=local(c.toLowerCase());if(l!==null){if(l)print(l);return}try{let r=await fetch('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c,user:'jesse_martinez_jr',use_llm:false})});let t=await r.text();if(!r.ok)throw new Error(t);print(JSON.stringify(JSON.parse(t),null,2))}catch(e){print('ERROR: '+e.message,'err')}}
+form.addEventListener('submit',e=>{e.preventDefault();run(input.value);input.value=''});document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>run(b.dataset.cmd));print('Jesse AI terminal ready. CRSMCPAI Alpha and Dominion infrastructure online.\nType help or enter a command.');
+</script></body></html>"""
 @app.get("/health")
 async def health():
     return {"status": "LIVE", "system": SYSTEM_NAME, "version": VERSION,
