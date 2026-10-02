@@ -59,11 +59,41 @@ main{max-width:980px;margin:0 auto;padding:20px}.top{display:flex;justify-conten
 const out=document.getElementById('out'),form=document.getElementById('form'),input=document.getElementById('cmd'),mic=document.getElementById('mic');
 function print(x,cls=''){const d=document.createElement('div');d.className=cls;d.textContent=x;out.appendChild(d);out.scrollTop=out.scrollHeight}
 function speak(x){if('speechSynthesis' in window){window.speechSynthesis.cancel();window.speechSynthesis.speak(new SpeechSynthesisUtterance(x))}}
-function local(c){if(c==='help')return 'Available commands:\n  status       full Dominion status\n  handshake    verify CRSMCPAI Alpha identity\n  audit        quantum audit\n  ledger       recent ledger blocks\n  clear        clear terminal\n  any text     execute through CRSMCPAI Alpha'; if(c==='clear'){out.innerHTML='';return ''} return null}
-async function run(c){c=c.trim();if(!c)return;input.disabled=true;print('jesse@alpha:~$ '+c,'prompt');const l=local(c.toLowerCase());if(l!==null){if(l)print(l);return}try{let r=await fetch('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c,user:'jesse_martinez_jr',use_llm:false})});let t=await r.text();if(!r.ok)throw new Error(t);const data=JSON.parse(t);const pretty=JSON.stringify(data,null,2);print(pretty);const exec=data.CRSMCPAI_ALPHA;const stack=data.stack_execution||{};const summary=(data.CRSMCPAI_ALPHA||data.CRSMCPAI_ALPHA||'Result')+'; status '+(data.status||'unknown')+'. Ledger entry '+(stack.ledger_index??'not reported')+'. SIREN anchors '+(stack.siren&&stack.siren.anchors_ok?'verified':'reported')+'.';speak(summary);out.focus()}catch(e){print('ERROR: '+e.message,'err')}finally{input.disabled=false;input.focus()}}
+function local(c){
+  if(c==='help') return `Available commands:
+  status       full Dominion status
+  handshake    verify CRSMCPAI Alpha identity
+  audit        quantum audit
+  ledger       recent ledger blocks
+  clear        clear terminal
+  any text     execute through CRSMCPAI Alpha`;
+  if(c==='clear'){out.innerHTML='';return ''}
+  return null;
+}
+async function run(c){
+  c=c.trim();
+  if(!c){print('Please enter a command first.','err');return}
+  input.disabled=true;
+  print('jesse@alpha:~$ '+c,'prompt');
+  print('Executing through CRSMCPAI Alpha...','prompt');
+  const l=local(c.toLowerCase());
+  if(l!==null){if(l)print(l);input.disabled=false;input.focus();return}
+  try{
+    const r=await fetch('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c,user:'jesse_martinez_jr',use_llm:false})});
+    const t=await r.text();
+    if(!r.ok) throw new Error(t||('HTTP '+r.status));
+    const data=JSON.parse(t);
+    print(JSON.stringify(data,null,2));
+    const stack=data.stack_execution||{};
+    const summary=(data.CRSMCPAI_ALPHA||'Result')+'; status '+(data.status||'unknown')+'. Ledger entry '+(stack.ledger_index??'not reported')+'.';
+    speak(summary);
+    out.focus();
+  }catch(e){print('ERROR: '+e.message,'err');speak('The command returned an error. Read the error shown on screen.')}
+  finally{input.disabled=false;input.focus()}
+}
 form.addEventListener('submit',e=>{e.preventDefault();run(input.value);input.value=''});
 const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(SpeechRecognition){const rec=new SpeechRecognition();rec.lang='en-US';rec.interimResults=false;rec.onstart=()=>{mic.textContent='LISTENING';print('Listening...','prompt')};rec.onresult=e=>{input.value=e.results[0][0].transcript;run(input.value);input.value=''};rec.onerror=()=>{mic.textContent='MIC';print('Voice input was not available. You can type instead.','err')};rec.onend=()=>{mic.textContent='MIC'};mic.onclick=()=>rec.start()}else{mic.disabled=true;mic.title='Use iPhone dictation in the command field'}
-document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>run(b.dataset.cmd));print('Jesse AI terminal ready. CRSMCPAI Alpha and Dominion infrastructure online.\nType help or enter a command.');
+document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>run(b.dataset.cmd));print('Jesse AI terminal ready. CRSMCPAI Alpha and Dominion infrastructure online.');
 </script></body></html>"""
 @app.get("/health")
 async def health():
