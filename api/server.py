@@ -36,7 +36,8 @@ app.include_router(admin_router)
 class CommandRequest(BaseModel):
     command: str
     user: str = "jesse_martinez_jr"
-    use_llm: bool = True
+    # Direct CRSMCPAI Alpha V2 execution is authoritative; an LLM is optional.
+    use_llm: bool = False
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -150,6 +151,8 @@ async def command(req: CommandRequest):
 
     return {
         "CRSMCPAI_ALPHA": "COMMAND_EXECUTED",
+        "execution_engine": "CRSMCPAI_ALPHA_V2",
+        "execution_mode": "direct",
         "command": req.command,
         "user": req.user,
         "owner": SOVEREIGN_OWNER,
