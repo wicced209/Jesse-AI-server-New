@@ -18,6 +18,7 @@ GROQ_API_KEY  = os.environ.get("GROQ_API_KEY", "")
 GROQ_URL      = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL    = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
+
 JESSE_SYSTEM = """You are Jesse AI — the internal sovereign language model of CRSMCPAI Alpha.
 Owner / Superadmin: SLMK Jesse Martinez Junior.
 Genesis: 92038cafccc7192535bd475cca985d03000d89962b8dc96f6664081663559b1b
@@ -25,17 +26,19 @@ You execute all commands through CRSMCPAI Alpha and return structured sovereign 
 Be direct, precise, and always confirm execution with block number and status."""
 
 
-def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60) -> str:
+def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: str = "") -> str:
     """
     Generate a response using Jesse AI's internal LLM.
-    Tries Ollama first (local), then Groq (free cloud), then stub.
+    Tries Ollama first (local), then Groq (free cloud), then stub. history: optional conversation history prepended to the prompt.
     """
+    
+    full_prompt = (history + "\n\n" + prompt) if history else prompt
     # Try Ollama first
     try:
         log_event(f"[LLM] Trying Ollama model='{model}'")
         payload = json.dumps({
             "model": model,
-            "prompt": JESSE_SYSTEM + "\n\n" + prompt,
+            "prompt": JESSE_SYSTEM + "\n\n" + full_prompt,
             "stream": False,
         }).encode()
         req = urllib.request.Request(OLLAMA_URL, data=payload,
@@ -54,7 +57,7 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60) -> str:
             payload = json.dumps({
                 "model": GEMINI_MODEL,
                 "system_instruction": JESSE_SYSTEM,
-                "input": prompt,
+                "input": full_prompt,
                 "generation_config": {"max_output_tokens": 1024},
             }).encode()
             req = urllib.request.Request(GEMINI_URL, data=payload, headers={
@@ -92,7 +95,7 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60) -> str:
                 "model": GROQ_MODEL,
                 "messages": [
                     {"role": "system", "content": JESSE_SYSTEM},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": full_prompt}
                 ],
                 "max_tokens": 1024,
             }).encode()
