@@ -12,7 +12,7 @@ from core.config import OLLAMA_URL, LOCAL_MODEL
 from core.logger import log_event
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
 GEMINI_URL     = "https://generativelanguage.googleapis.com/v1beta/interactions"
 GROQ_API_KEY  = os.environ.get("GROQ_API_KEY", "")
 GROQ_URL      = "https://api.groq.com/openai/v1/chat/completions"
@@ -29,9 +29,10 @@ Be direct, precise, and always confirm execution with block number and status.""
 def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: str = "") -> str:
     """
     Generate a response using Jesse AI's internal LLM.
-    Tries Ollama first (local), then Groq (free cloud), then stub. history: optional conversation history prepended to the prompt.
+    Tries Ollama first (local), then Gemini (Google AI Studio), then Groq (free cloud), then stub.
+    history: optional conversation history prepended to the prompt.
     """
-    
+
     full_prompt = (history + "\n\n" + prompt) if history else prompt
     # Try Ollama first
     try:
@@ -48,17 +49,15 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: 
             log_event(f"[LLM] Ollama response ({len(result)} chars)")
             return result
     except Exception as e:
-        log_event(f"[LLM] Ollama unavailable: {e} — trying Groq", "warning")
+        log_event(f"[LLM] Ollama unavailable: {e} — trying Gemini", "warning")
 
-    # Try Google Gemini (Google AI Studio cloud model)
+    # Try Google Gemini (Google AI Studio cloud model) via Interactions API
     if GEMINI_API_KEY:
         try:
             log_event(f"[LLM] Trying Gemini model='{GEMINI_MODEL}'")
             payload = json.dumps({
                 "model": GEMINI_MODEL,
-                "system_instruction": JESSE_SYSTEM,
-                "input": full_prompt,
-                "generation_config": {"max_output_tokens": 1024},
+                "input": JESSE_SYSTEM + "\n\n" + full_prompt,
             }).encode()
             req = urllib.request.Request(GEMINI_URL, data=payload, headers={
                 "Content-Type": "application/json",
@@ -67,22 +66,17 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: 
             })
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 data = json.loads(r.read())
-            # The Interactions API may expose output_text directly or return text blocks.
-            result = data.get("output_text", "")
+            # Interactions API response: steps[].content[].text
+            texts = []
+            for step in data.get("steps", []):
+                for block in step.get("content", []):
+                    t = block.get("text")
+                    if isinstance(t, str):
+                        texts.append(t)
+            result = "\n".join(texts).strip() or data.get("output_text", "")
             if not result:
-                blocks = data.get("output", data.get("outputs", []))
-                texts = []
-                def collect(value):
-                    if isinstance(value, dict):
-                        if isinstance(value.get("text"), str): texts.append(value["text"])
-                        for k, v in value.items():
-                            if k not in {"text", "thought"}: collect(v)
-                    elif isinstance(value, list):
-                        for item in value: collect(item)
-                collect(blocks)
-                result = "\n".join(texts).strip()
-            if not result:
-                raise RuntimeError("Gemini returned no text")
+                err = data.get("error", {})
+                raise RuntimeError(f"Gemini returned no text: {err.get('message', 'empty response') if err else 'no steps'}")
             log_event(f"[LLM] Gemini response ({len(result)} chars)")
             return result
         except Exception as e:
