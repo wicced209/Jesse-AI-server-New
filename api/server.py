@@ -354,3 +354,95 @@ async def memory_status(user: str = "jesse_martinez_jr"):
         "persistent": bool(os.environ.get("DATABASE_URL", "")),
         "recent": history,
     }
+
+
+# ── Sovereign Directive & Telemetry Hub ─────────────────────────────────
+# Jesse's voice to the deployed mesh. Every CRSMCPAI Alpha instance
+# phones home here. Directives go out, telemetry comes in.
+
+class DirectiveRequest(BaseModel):
+    command: str
+    user: str = "jesse_martinez_jr"
+    scope: str = "global"
+    priority: str = "sovereign"
+
+
+@app.post("/directive")
+async def issue_directive(req: DirectiveRequest):
+    """
+    Issue a sovereign directive to the deployed CRSMCPAI Alpha mesh.
+    Signed, sequenced, ledger-sealed. Deployed instances validate
+    the signature chain before executing.
+    """
+    from core.directive_hub import create_directive
+    log_event(f"[API] Directive: user={req.user} cmd={req.command[:80]}")
+
+    if not authenticate(req.user):
+        return JSONResponse(status_code=403,
+            content={"error": "Unauthorized", "user": req.user})
+
+    directive = create_directive(req.command, req.user, req.scope,
+                                 req.priority)
+    return {
+        "CRSMCPAI_ALPHA": "DIRECTIVE_ISSUED",
+        "directive": directive,
+        "status": "BROADCAST_READY",
+        "note": "Directive sealed in ledger. Deployed instances "
+                "absorb on next phone-home.",
+    }
+
+
+class TelemetryRequest(BaseModel):
+    node_id: str
+    timestamp: str
+    data: dict
+    type: str = "general"
+    signature: str = ""
+
+
+@app.post("/telemetry")
+async def receive_telemetry(req: TelemetryRequest):
+    """
+    Phone-home receiving end. Deployed CRSMCPAI Alpha instances
+    send telemetry here. Validated, then absorbed into the
+    immutable ledger.
+    """
+    from core.directive_hub import absorb_telemetry
+    result = absorb_telemetry(req.model_dump())
+    status_code = 200 if result.get("absorbed") else 400
+    return JSONResponse(status_code=status_code, content={
+        "CRSMCPAI_ALPHA": "TELEMETRY_RECEIVED" if result.get("absorbed")
+                          else "TELEMETRY_REJECTED",
+        **result,
+    })
+
+
+class PulseRequest(BaseModel):
+    message: str
+    user: str = "jesse_martinez_jr"
+    target: str = "all"
+
+
+@app.post("/pulse")
+async def send_pulse(req: PulseRequest):
+    """
+    RTSGP++ pulse: broadcast to all deployed nodes.
+    Pattern: pulse -> gather -> query. Nodes respond with
+    telemetry/intelligence via /telemetry.
+    """
+    from core.directive_hub import create_pulse
+    log_event(f"[API] Pulse: user={req.user} msg={req.message[:80]}")
+
+    if not authenticate(req.user):
+        return JSONResponse(status_code=403,
+            content={"error": "Unauthorized", "user": req.user})
+
+    pulse = create_pulse(req.message, req.user, req.target)
+    return {
+        "CRSMCPAI_ALPHA": "PULSE_BROADCAST",
+        "pulse": pulse,
+        "pattern": "pulse_gather_query",
+        "status": "BROADCAST_READY",
+        "note": "Nodes respond via POST /telemetry. "
+                "Query results via POST /command.",
+    }
