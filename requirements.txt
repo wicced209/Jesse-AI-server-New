@@ -6,3 +6,4 @@ python-dotenv
 cryptography
 numpy
 pydantic
+psycopg2-binary
