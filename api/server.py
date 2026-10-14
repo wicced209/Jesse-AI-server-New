@@ -197,6 +197,82 @@ async def query(req: QueryRequest):
     ))
 
 
+class BuildRequest(BaseModel):
+    command: str
+    user: str = "jesse_martinez_jr"
+    use_llm: bool = True
+
+
+@app.post("/build")
+async def autonomous_build(req: BuildRequest):
+    """
+    Fully autonomous internal build. Plans, generates code, executes it
+    inside the sovereign sandbox, and returns real results. 100% internal
+    to CRSMCPAI Alpha — no outside hands.
+    """
+    log_event(f"[API] Autonomous build: user={req.user} cmd={req.command[:80]}")
+
+    if not authenticate(req.user):
+        return JSONResponse(status_code=403,
+            content={"error": "Unauthorized", "user": req.user})
+
+    build_result = dominion.autonomous_build(req.command, req.user)
+
+    # Sovereign conversation memory — immutable, never forgetting.
+    history_text = ""
+    try:
+        from memory.conversation import add_message, format_history_for_prompt
+        history_text = format_history_for_prompt(req.user, limit=10)
+        add_message(req.user, "user", f"[BUILD] {req.command}")
+    except Exception as e:
+        log_event(f"[MEMORY] conversation store unavailable: {e}", "warning")
+
+    # Jesse AI narrates what was built, internally.
+    llm_response = None
+    if req.use_llm:
+        try:
+            summary = "\n".join(
+                f"Step {s['step']}: {s['description'][:80]} -> {s['status']}"
+                for s in build_result.get("steps", [])
+            )
+            outputs = "\n".join(
+                f"Step {s['step']} output:\n{(s['stdout'] or '')[:600]}"
+                for s in build_result.get("steps", [])
+                if s.get("stdout")
+            )
+            llm_response = generate(
+                f"CRSMCPAI Alpha autonomous build from Superadmin {req.user}:\n"
+                f"Command: {req.command}\n\n"
+                f"Build plan executed internally:\n{summary}\n\n"
+                f"Execution outputs:\n{outputs}\n\n"
+                f"All steps OK: {build_result.get('all_ok')}\n\n"
+                f"As Jesse AI, summarize what was built and the results. "
+                f"Be direct. Confirm execution with status.",
+                history=history_text,
+            )
+        except Exception as e:
+            llm_response = f"Jesse AI LLM: {str(e)}"
+
+    if llm_response:
+        try:
+            from memory.conversation import add_message as _add
+            _add(req.user, "assistant", llm_response)
+        except Exception as e:
+            log_event(f"[MEMORY] failed to store reply: {e}", "warning")
+
+    return {
+        "CRSMCPAI_ALPHA": "AUTONOMOUS_BUILD_EXECUTED",
+        "execution_engine": "CRSMCPAI_ALPHA_V2",
+        "execution_mode": "autonomous_internal",
+        "command": req.command,
+        "user": req.user,
+        "owner": SOVEREIGN_OWNER,
+        "build_result": build_result,
+        "jesse_ai_response": llm_response,
+        "status": "SUCCESS" if build_result.get("all_ok") else "PARTIAL",
+    }
+
+
 @app.get("/intelligence/siren")
 async def siren_intelligence():
     """Return the current SIREN module status."""

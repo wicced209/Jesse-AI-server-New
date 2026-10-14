@@ -161,6 +161,66 @@ class DominionStack:
         self._ops_log.append({"op": "quantum_audit", "ts": time.time()})
         return audit
 
+    # ── v6: fully autonomous internal build loop ──────────────────────────
+    # Plan -> Build (LLM generates code) -> Execute (sovereign sandbox) ->
+    # Verify. 100% internal. No outside hands.
+    def autonomous_build(self, command: str, user: str = "jesse_martinez_jr") -> dict:
+        log_event(f"[DOMINION] Autonomous build started — user={user}")
+        create_event({"event": "AUTONOMOUS_BUILD_START", "command": command,
+                      "user": user})
+        started = time.time()
+
+        # 1. Plan
+        plan = planner_agent(command)
+        steps = plan.get("steps", []) or [command]
+
+        # 2. Build + execute each step internally
+        step_results = []
+        context_note = ""
+        for i, step in enumerate(steps, 1):
+            step_task = step
+            if context_note:
+                step_task = f"{step}\nContext from previous steps: {context_note[:500]}"
+            log_event(f"[DOMINION] Autonomous step {i}/{len(steps)}: {step[:60]}")
+            built = builder_agent(step_task)
+            step_results.append({
+                "step": i,
+                "description": step,
+                "status": built.get("status"),
+                "stdout": (built.get("stdout") or "")[:2000],
+                "stderr": (built.get("stderr") or "")[:1000],
+                "result": built.get("result"),
+                "attempts_used": built.get("attempts_used"),
+            })
+            # Feed successful output into the next step's context.
+            if built.get("status") == "ok" or built.get("status") == "executed":
+                out = (built.get("stdout") or "").strip()
+                if out:
+                    context_note = (context_note + "\n" + out)[-800:]
+
+        all_ok = all(s["status"] in ("ok", "executed") for s in step_results)
+        elapsed_ms = int((time.time() - started) * 1000)
+        create_event({"event": "AUTONOMOUS_BUILD_COMPLETE",
+                      "command": command, "user": user,
+                      "all_ok": all_ok, "steps": len(steps),
+                      "elapsed_ms": elapsed_ms})
+        self._ops_log.append({"op": "autonomous_build", "ts": time.time()})
+        log_event(f"[DOMINION] Autonomous build {'COMPLETE' if all_ok else 'PARTIAL'} "
+                  f"in {elapsed_ms}ms")
+
+        return {
+            "autonomous": True,
+            "command": command,
+            "user": user,
+            "plan": plan.get("steps"),
+            "steps": step_results,
+            "all_ok": all_ok,
+            "steps_completed": sum(1 for s in step_results
+                                   if s["status"] in ("ok", "executed")),
+            "steps_total": len(step_results),
+            "elapsed_ms": elapsed_ms,
+        }
+
     def process(self, command: str, user: str = "jesse_martinez_jr") -> dict:
         log_event(f"[DOMINION] Command received — user={user}")
         ledger_block = create_event({"command": command, "user": user})

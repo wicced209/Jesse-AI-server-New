@@ -29,10 +29,9 @@ Be direct, precise, and always confirm execution with block number and status.""
 def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: str = "") -> str:
     """
     Generate a response using Jesse AI's internal LLM.
-    Tries Ollama first (local), then Gemini (Google AI Studio), then Groq (free cloud), then stub.
-    history: optional conversation history prepended to the prompt.
+    Tries Ollama first (local), then Groq (free cloud), then stub. history: optional conversation history prepended to the prompt.
     """
-
+    
     full_prompt = (history + "\n\n" + prompt) if history else prompt
     # Try Ollama first
     try:
@@ -49,7 +48,7 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: 
             log_event(f"[LLM] Ollama response ({len(result)} chars)")
             return result
     except Exception as e:
-        log_event(f"[LLM] Ollama unavailable: {e} — trying Gemini", "warning")
+        log_event(f"[LLM] Ollama unavailable: {e} — trying Groq", "warning")
 
     # Try Google Gemini (Google AI Studio cloud model) via Interactions API
     if GEMINI_API_KEY:
@@ -73,6 +72,7 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: 
                     t = block.get("text")
                     if isinstance(t, str):
                         texts.append(t)
+            # Fallback: some responses expose output_text directly
             result = "\n".join(texts).strip() or data.get("output_text", "")
             if not result:
                 err = data.get("error", {})
