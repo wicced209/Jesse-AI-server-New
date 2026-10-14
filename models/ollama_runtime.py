@@ -60,6 +60,7 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60) -> str:
             req = urllib.request.Request(GEMINI_URL, data=payload, headers={
                 "Content-Type": "application/json",
                 "x-goog-api-key": GEMINI_API_KEY,
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
             })
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 data = json.loads(r.read())
@@ -99,6 +100,7 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60) -> str:
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
                 })
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 data = json.loads(r.read())
