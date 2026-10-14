@@ -144,6 +144,14 @@ async def command(req: CommandRequest):
 
     # Route through full Dominion stack
     stack_result = dominion.process(req.command, req.user)
+    # Sovereign conversation memory — immutable, never forgetting.
+    history_text = ""
+    try:
+        from memory.conversation import add_message, format_history_for_prompt
+        history_text = format_history_for_prompt(req.user, limit=10)
+        add_message(req.user, "user", req.command)
+    except Exception as e:
+        log_event(f"[MEMORY] conversation store unavailable: {e}", "warning")
 
     # Generate LLM response through Jesse AI internal model
     llm_response = None
@@ -152,10 +160,19 @@ async def command(req: CommandRequest):
             llm_response = generate(
                 f"CRSMCPAI Alpha command from Superadmin {req.user}:\n{req.command}\n\n"
                 f"Stack context: {stack_result.get('siren',{})}\n"
-                f"Execute and return sovereign output."
+                f"Execute and return sovereign output.",
+                history=history_text,
             )
         except Exception as e:
             llm_response = f"Jesse AI LLM: {str(e)}"
+
+    # Seal the assistant reply into immutable memory
+    if llm_response:
+        try:
+            from memory.conversation import add_message as _add
+            _add(req.user, "assistant", llm_response)
+        except Exception as e:
+            log_event(f"[MEMORY] failed to store reply: {e}", "warning")
 
     return {
         "CRSMCPAI_ALPHA": "COMMAND_EXECUTED",
@@ -244,3 +261,20 @@ async def ledger():
 @app.get("/log")
 async def log():
     return {"owner": SOVEREIGN_OWNER, "events": get_log()[-50:]}
+
+
+@app.get("/memory")
+async def memory_status(user: str = "jesse_martinez_jr"):
+    """Sovereign conversation memory status — immutable, never forgetting."""
+    from memory.conversation import get_history, count_messages
+    from memory.ledger import verify_chain, GENESIS
+    history = get_history(user, limit=5)
+    return {
+        "owner": SOVEREIGN_OWNER,
+        "user": user,
+        "total_messages": count_messages(user),
+        "chain_valid": verify_chain(),
+        "genesis": GENESIS,
+        "persistent": bool(os.environ.get("DATABASE_URL", "")),
+        "recent": history,
+    }
