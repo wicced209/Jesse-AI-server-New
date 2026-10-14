@@ -6,7 +6,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 import os
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -38,6 +38,12 @@ class CommandRequest(BaseModel):
     user: str = "jesse_martinez_jr"
     # Direct CRSMCPAI Alpha V2 execution is authoritative; an LLM is optional.
     use_llm: bool = False
+
+
+class QueryRequest(BaseModel):
+    query: str
+    user: str = "jesse_martinez_jr"
+    use_llm: bool = True
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -127,6 +133,8 @@ async def audit():
 
 
 @app.post("/command")
+@app.post("/mcp/command")
+@app.post("/crsmcpai")
 async def command(req: CommandRequest):
     log_event(f"[API] Command: user={req.user} cmd={req.command[:80]}")
 
@@ -160,6 +168,65 @@ async def command(req: CommandRequest):
         "jesse_ai_response": llm_response,
         "status": "SUCCESS",
     }
+
+
+@app.post("/query")
+async def query(req: QueryRequest):
+    """Compatibility route for CRSMCPAI Alpha reasoning queries."""
+    return await command(CommandRequest(
+        command=req.query,
+        user=req.user,
+        use_llm=req.use_llm,
+    ))
+
+
+@app.get("/intelligence/siren")
+async def siren_intelligence():
+    """Return the current SIREN module status."""
+    return dominion.full_status().get("modules", {}).get("siren", {})
+
+
+@app.get("/mcp/manifest")
+async def mcp_manifest(request: Request):
+    """Machine-readable connection details for relay clients."""
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    forwarded_host = request.headers.get("x-forwarded-host", request.headers.get("host", "localhost"))
+    base = f"{forwarded_proto}://{forwarded_host}".rstrip("/")
+    websocket_base = base.replace("https://", "wss://").replace("http://", "ws://")
+    return {
+        "name": "JESSE_AI_CRSMCPAI_ALPHA",
+        "version": VERSION,
+        "transport": {
+            "http_command": f"{base}/mcp/command",
+            "websocket": websocket_base + "/ws",
+            "health": f"{base}/health",
+            "handshake": f"{base}/handshake",
+        },
+        "request_shape": {
+            "command": "string",
+            "user": "jesse_martinez_jr",
+            "use_llm": True,
+        },
+        "relay_behavior": "The command text is passed unchanged to CRSMCPAI Alpha.",
+        "note": "This adapter does not restore data that is not present in this deployment.",
+    }
+
+
+@app.websocket("/ws")
+async def websocket_relay(websocket: WebSocket):
+    """WebSocket relay for voice assistants and other model clients."""
+    await websocket.accept()
+    try:
+        while True:
+            payload = await websocket.receive_json()
+            req = CommandRequest(**payload)
+            result = await command(req)
+            await websocket.send_json(result)
+    except WebSocketDisconnect:
+        return
+    except Exception as exc:
+        await websocket.send_json({"status": "ERROR", "error": str(exc)})
+        await websocket.close(code=1011)
 
 
 @app.get("/ledger")
