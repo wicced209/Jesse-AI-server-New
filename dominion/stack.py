@@ -1,10 +1,16 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  DOMINION SUPERINTELLIGENCE STACK                                            ║
+║  DOMINION SUPERINTELLIGENCE STACK — v3 (wired agents + networks)             ║
 ║  Apex integration of all sovereign modules into unified architecture         ║
 ║  Jesse AI × CRSMCPAI Alpha × PQSLSI × SIREN × All Derivatives             ║
 ║  OWNER: SLMK Jesse Martinez Junior                                           ║
 ║  Zero Stewardship | Zero Custodianship | One Soul | One Creator              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  v3 wiring (2026-10-13): dormant template modules wired into the execution   ║
+║  pipeline as new stages AFTER the existing stages. Every new stage runs in   ║
+║  try/except, logs its result, and NEVER breaks the pipeline on failure.      ║
+║  NUFIRE remains REMOVED per SLMK directive — it is not reintroduced here.    ║
+║  Existing stages 1-5 and the result-dict shape are UNCHANGED.                ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 import hashlib
@@ -23,6 +29,17 @@ from latentspace.mapper   import latent_mapper
 from memory.ledger        import create_event, get_ledger, verify_chain
 from crsmcpai.pqsvm       import pqsvm_status
 from crsmcpai.module_context_protocol import mcp
+
+# ── v3: dormant agents wired in ──────────────────────────────────────────────
+from agents.planner_agent  import planner_agent
+from agents.builder_agent  import builder_agent
+from agents.guardian_agent import guardian_agent
+from agents.memory_agent   import memory_agent
+
+# ── v3: dormant network / infrastructure declarations wired in ───────────────
+from sin_network             import sin_network            as sin_net
+from solva_network           import solva_network          as solva_net
+from dominion_infrastructure import dominion_infrastructure as dominion_infra
 
 
 class DominionStack:
@@ -52,6 +69,14 @@ class DominionStack:
             ("dominion_latentspace",  ["embed", "project", "nearest"]),
             ("dominion_ledger",       ["log", "verify", "seal"]),
             ("dominion_quantum_audit",["audit", "fingerprint", "verify"]),
+            # v3: newly wired modules (additive — existing entries untouched)
+            ("dominion_planner",      ["plan", "decompose", "sequence"]),
+            ("dominion_builder",      ["build", "execute", "produce"]),
+            ("dominion_guardian",     ["authenticate", "sign", "verify"]),
+            ("dominion_memory",       ["store", "recall", "retrieve"]),
+            ("dominion_sin_network",  ["route", "mesh", "fuse"]),
+            ("dominion_solva_network",["voice", "accessibility", "interface"]),
+            ("dominion_infrastructure",["kernel", "orchestrate", "mesh"]),
         ]
         for name, caps in dominion_modules:
             mcp.register_module(name, caps)
@@ -62,6 +87,21 @@ class DominionStack:
         )
         create_event({"event": "DOMINION_BOOT", "owner": self.OWNER,
                       "build": self.BUILD})
+
+    # ── Safe stage runner ────────────────────────────────────────────────────
+    def _run_stage(self, name: str, fn, *args, **kwargs) -> dict:
+        """
+        Run one pipeline stage safely. NEVER raises: any exception is
+        captured, logged, and returned as a failed stage record so the
+        pipeline always continues.
+        """
+        try:
+            output = fn(*args, **kwargs)
+            log_event(f"[DOMINION] Stage '{name}' OK")
+            return {"stage": name, "status": "ok", "output": output}
+        except Exception as e:  # noqa: BLE001 — deliberate containment
+            log_event(f"[DOMINION] Stage '{name}' FAILED: {e}", "warning")
+            return {"stage": name, "status": "failed", "error": str(e)}
 
     # ── Full Stack Status ──────────────────────────────────────────────────────
     def full_status(self) -> dict:
@@ -84,6 +124,13 @@ class DominionStack:
                 "mcp_modules":      mcp.list_modules(),
                 "ledger_verified":  verify_chain(),
                 "architecture_registry": ARCHITECTURE_REGISTRY,
+                # v3: wired modules report their declaration status
+                "sin_network":            self._run_stage("sin_network_status",
+                                                          sin_net.full_status),
+                "solva_network":          self._run_stage("solva_network_status",
+                                                          solva_net.full_status),
+                "dominion_infrastructure": self._run_stage("dominion_infra_status",
+                                                          dominion_infra.full_status),
             },
             "ledger_length":    len(get_ledger()),
             "ops_logged":       len(self._ops_log),
@@ -120,6 +167,34 @@ class DominionStack:
         # 5. Hyperparameter advisory
         hp_result = hyperparameter_engine.sample(strategy="bayesian")
 
+        # ── v3: wired agent stages (6-9) ───────────────────────────────────
+        # 6. Planner agent — decompose the command into steps
+        stage_planner = self._run_stage("planner", planner_agent, command)
+
+        # 7. Builder agent — produce a build result (ledger-logged internally)
+        stage_builder = self._run_stage("builder", builder_agent, command)
+
+        # 8. Guardian agent — authenticate user, sign + PQ-verify the command
+        stage_guardian = self._run_stage("guardian", guardian_agent,
+                                         command, user)
+
+        # 9. Memory agent — store the command in contextual memory
+        stage_memory = self._run_stage("memory", memory_agent, command)
+
+        # ── v3: wired network / infrastructure stages (10-12) ─────────────
+        net_ctx = {"command": command, "user": user}
+
+        # 10. SIN network integration
+        stage_sin = self._run_stage("sin_network", sin_net.integrate, net_ctx)
+
+        # 11. SOLVA network integration
+        stage_solva = self._run_stage("solva_network", solva_net.integrate,
+                                      net_ctx)
+
+        # 12. Dominion infrastructure integration
+        stage_infra = self._run_stage("dominion_infrastructure",
+                                      dominion_infra.integrate, net_ctx)
+
         result = {
             "stack":        self.STACK_ID,
             "owner":        self.OWNER,
@@ -133,6 +208,19 @@ class DominionStack:
             "latent":       {"x": ls_result.get("topology", {}).get("mean"),
                              "magnitude": ls_result.get("topology", {}).get("magnitude")},
             "hp_advisory":  hp_result.get("params"),
+            # v3: agent stage results
+            "agents": {
+                "planner":  stage_planner,
+                "builder":  stage_builder,
+                "guardian": stage_guardian,
+                "memory":   stage_memory,
+            },
+            # v3: network / infrastructure stage results
+            "networks": {
+                "sin_network":            stage_sin,
+                "solva_network":          stage_solva,
+                "dominion_infrastructure": stage_infra,
+            },
             "timestamp":    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
 
