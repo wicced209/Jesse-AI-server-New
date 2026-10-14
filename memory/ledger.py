@@ -75,11 +75,13 @@ def _load_pg():
                 "FROM ledger_blocks ORDER BY idx ASC"
             )
             rows = cur.fetchall()
-        return [
-            {"index": r[0], "ts": r[1], "owner": r[2], "payload": r[3],
-             "prev_hash": r[4], "block_hash": r[5]}
-            for r in rows
-        ]
+        result = []
+        for r in rows:
+            block = {"index": r[0], "ts": r[1], "owner": r[2], "payload": r[3],
+                     "prev_hash": r[4], "block_hash": r[5]}
+            block["hash"] = block["block_hash"]
+            result.append(block)
+        return result
     except Exception:
         return None
 
@@ -102,7 +104,6 @@ def _save_pg(block):
 
 
 def _get_chain():
-    """Postgres is source of truth. Then memory cache. Then file backup."""
     pg_chain = _load_pg()
     if pg_chain is not None:
         return pg_chain
@@ -110,16 +111,14 @@ def _get_chain():
         return _ledger_cache
     file_chain = _load_file()
     if file_chain:
+        for b in file_chain:
+            if "hash" not in b and "block_hash" in b:
+                b["hash"] = b["block_hash"]
         _ledger_cache.extend(file_chain)
     return _ledger_cache
 
 
 def create_event(payload: dict) -> dict:
-    """
-    Append a new event to the immutable ledger.
-    Each block is SHA3-512 chained to the previous block's hash,
-    anchored to the sovereign genesis seal.
-    """
     chain = _get_chain()
     prev = chain[-1]["block_hash"] if chain else GENESIS
     block = {
@@ -132,6 +131,7 @@ def create_event(payload: dict) -> dict:
     block["block_hash"] = hashlib.sha3_512(
         json.dumps(block, sort_keys=True).encode()
     ).hexdigest()
+    block["hash"] = block["block_hash"]
     pg_ok = _save_pg(block)
     if chain is _ledger_cache:
         chain.append(block)
@@ -146,15 +146,10 @@ def create_event(payload: dict) -> dict:
 
 
 def get_ledger() -> list:
-    """Return a copy of the full ledger chain."""
     return list(_get_chain())
 
 
 def verify_chain() -> bool:
-    """
-    Walk the chain and verify every block's hash and linkage.
-    Returns True if the ledger is intact, False if tampered.
-    """
     chain = _get_chain()
     if not chain:
         return True
@@ -162,7 +157,7 @@ def verify_chain() -> bool:
         return False
     for i, block in enumerate(chain):
         stored = block.get("block_hash")
-        check = {k: v for k, v in block.items() if k != "block_hash"}
+        check = {k: v for k, v in block.items() if k not in ("block_hash", "hash")}
         expected = hashlib.sha3_512(
             json.dumps(check, sort_keys=True).encode()
         ).hexdigest()
