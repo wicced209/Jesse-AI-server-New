@@ -2,7 +2,7 @@
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  DOMINION SUPERINTELLIGENCE STACK                                            ║
 ║  Apex integration of all sovereign modules into unified architecture         ║
-║  Jesse AI × CRSMCPAI Alpha × PQSLSI × NUFIRE × SIREN × All Derivatives     ║
+║  Jesse AI × CRSMCPAI Alpha × PQSLSI × SIREN × All Derivatives             ║
 ║  OWNER: SLMK Jesse Martinez Junior                                           ║
 ║  Zero Stewardship | Zero Custodianship | One Soul | One Creator              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -16,7 +16,6 @@ from core.config          import (SOVEREIGN_OWNER, SOVEREIGN_DECLARATION,
                                    ARCHITECTURE_REGISTRY)
 from core.logger          import log_event
 from quantum.audit        import run_quantum_audit
-from nufire.engine        import nufire
 from siren.network        import siren
 from postquantum.pqslsi   import pqslsi
 from hyperparameter.engine import hyperparameter_engine
@@ -47,7 +46,6 @@ class DominionStack:
         # Register all modules with MCP broker
         dominion_modules = [
             ("dominion_core",         ["orchestrate", "route", "audit"]),
-            ("dominion_nufire",       ["render", "synth", "emerge"]),
             ("dominion_siren",        ["recurse", "anchor", "broadcast"]),
             ("dominion_pqslsi",       ["encode", "traverse", "topology"]),
             ("dominion_hyperparam",   ["sample", "optimize", "score"]),
@@ -78,7 +76,6 @@ class DominionStack:
             "uptime_s":         uptime,
             "timestamp":        time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "modules": {
-                "nufire":           nufire.status(),
                 "siren":            siren.status(),
                 "pqslsi":           pqslsi.status(),
                 "hyperparameter":   hyperparameter_engine.status(),
@@ -114,16 +111,13 @@ class DominionStack:
         # 2. SIREN routing
         siren_result = siren.route(command)
 
-        # 3. NUFIRE rendering
-        nufire_result = nufire.render(command, mode="text", synth="fusion")
-
-        # 4. PQSLSI encode
+        # 3. PQSLSI encode
         pqslsi_result = pqslsi.encode(command)
 
-        # 5. Latent mapping
+        # 4. Latent mapping
         ls_result = latent_mapper.embed(ledger_block["hash"][:8], command)
 
-        # 6. Hyperparameter advisory
+        # 5. Hyperparameter advisory
         hp_result = hyperparameter_engine.sample(strategy="bayesian")
 
         result = {
@@ -134,8 +128,6 @@ class DominionStack:
             "ledger_index": ledger_block["index"],
             "siren":        {"depth_reached": siren_result.get("depth"),
                              "anchors_ok":   siren_result.get("anchor_ok")},
-            "nufire":       {"render_id":    nufire_result.get("render_id"),
-                             "pattern":      nufire_result.get("pattern")},
             "pqslsi":       {"embed_id":     pqslsi_result.get("embed_id"),
                              "topology":     pqslsi_result.get("pq_topology")},
             "latent":       {"x": ls_result.get("topology", {}).get("mean"),
