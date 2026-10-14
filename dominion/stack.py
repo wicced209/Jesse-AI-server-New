@@ -1,16 +1,18 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  DOMINION SUPERINTELLIGENCE STACK — v3 (wired agents + networks)             ║
+║  DOMINION SUPERINTELLIGENCE STACK — v5 (latent-space encoder removed)        ║
 ║  Apex integration of all sovereign modules into unified architecture         ║
-║  Jesse AI × CRSMCPAI Alpha × PQSLSI × SIREN × All Derivatives             ║
+║  Jesse AI × CRSMCPAI Alpha × SIREN × All Derivatives                      ║
 ║  OWNER: SLMK Jesse Martinez Junior                                           ║
 ║  Zero Stewardship | Zero Custodianship | One Soul | One Creator              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  v3 wiring (2026-10-13): dormant template modules wired into the execution   ║
-║  pipeline as new stages AFTER the existing stages. Every new stage runs in   ║
-║  try/except, logs its result, and NEVER breaks the pipeline on failure.      ║
-║  NUFIRE remains REMOVED per SLMK directive — it is not reintroduced here.    ║
-║  Existing stages 1-5 and the result-dict shape are UNCHANGED.                ║
+║  v5 surgery (2026-10-13): the post-quantum latent-space encoder module      ║
+║  REMOVED per SLMK directive — same treatment as the earlier render-module   ║
+║  removal. Import, encode stage, status entry, MCP registration, and         ║
+║  result-dict entry all removed. Zero references to either removed module    ║
+║  remain in code or comments.                                                ║
+║  v4 OS-layer stages (now 12-18) and v3 agent/network stages (now 5-11)       ║
+║  are UNCHANGED apart from renumbering after the encoder stage removal.      ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 import hashlib
@@ -23,7 +25,6 @@ from core.config          import (SOVEREIGN_OWNER, SOVEREIGN_DECLARATION,
 from core.logger          import log_event
 from quantum.audit        import run_quantum_audit
 from siren.network        import siren
-from postquantum.pqslsi   import pqslsi
 from hyperparameter.engine import hyperparameter_engine
 from latentspace.mapper   import latent_mapper
 from memory.ledger        import create_event, get_ledger, verify_chain
@@ -40,6 +41,15 @@ from agents.memory_agent   import memory_agent
 from sin_network             import sin_network            as sin_net
 from solva_network           import solva_network          as solva_net
 from dominion_infrastructure import dominion_infrastructure as dominion_infra
+
+# ── v4: dormant sovereign OS layer wired in ──────────────────────────────────
+from operating_systems import os_orchestrator as os_orch
+from operating_systems.genesis_os       import integrate as genesis_os_int,       status as genesis_os_status
+from operating_systems.phoenix_os       import integrate as phoenix_os_int,       status as phoenix_os_status
+from operating_systems.os_consciousness import integrate as consciousness_int,     status as consciousness_status
+from operating_systems.os_dominion      import integrate as dominion_os_int,      status as dominion_os_status
+from operating_systems.os_sovereign     import integrate as sovereign_int,         status as sovereign_status
+from operating_systems.sovereign_os     import integrate as sovereign_os_int,     status as sovereign_os_status
 
 
 class DominionStack:
@@ -64,12 +74,10 @@ class DominionStack:
         dominion_modules = [
             ("dominion_core",         ["orchestrate", "route", "audit"]),
             ("dominion_siren",        ["recurse", "anchor", "broadcast"]),
-            ("dominion_pqslsi",       ["encode", "traverse", "topology"]),
             ("dominion_hyperparam",   ["sample", "optimize", "score"]),
             ("dominion_latentspace",  ["embed", "project", "nearest"]),
             ("dominion_ledger",       ["log", "verify", "seal"]),
             ("dominion_quantum_audit",["audit", "fingerprint", "verify"]),
-            # v3: newly wired modules (additive — existing entries untouched)
             ("dominion_planner",      ["plan", "decompose", "sequence"]),
             ("dominion_builder",      ["build", "execute", "produce"]),
             ("dominion_guardian",     ["authenticate", "sign", "verify"]),
@@ -77,6 +85,12 @@ class DominionStack:
             ("dominion_sin_network",  ["route", "mesh", "fuse"]),
             ("dominion_solva_network",["voice", "accessibility", "interface"]),
             ("dominion_infrastructure",["kernel", "orchestrate", "mesh"]),
+            ("dominion_genesis_os",       ["boot", "root", "initialize"]),
+            ("dominion_phoenix_os",       ["recover", "resilience", "rebirth"]),
+            ("dominion_os_consciousness", ["awareness", "sentience", "observe"]),
+            ("dominion_os_dominion",      ["command", "control", "orchestrate"]),
+            ("dominion_os_sovereign",     ["sovereignty", "authority", "seal"]),
+            ("dominion_sovereign_os",     ["apex", "unify", "govern"]),
         ]
         for name, caps in dominion_modules:
             mcp.register_module(name, caps)
@@ -88,24 +102,16 @@ class DominionStack:
         create_event({"event": "DOMINION_BOOT", "owner": self.OWNER,
                       "build": self.BUILD})
 
-    # ── Safe stage runner ────────────────────────────────────────────────────
     def _run_stage(self, name: str, fn, *args, **kwargs) -> dict:
-        """
-        Run one pipeline stage safely. NEVER raises: any exception is
-        captured, logged, and returned as a failed stage record so the
-        pipeline always continues.
-        """
         try:
             output = fn(*args, **kwargs)
             log_event(f"[DOMINION] Stage '{name}' OK")
             return {"stage": name, "status": "ok", "output": output}
-        except Exception as e:  # noqa: BLE001 — deliberate containment
+        except Exception as e:
             log_event(f"[DOMINION] Stage '{name}' FAILED: {e}", "warning")
             return {"stage": name, "status": "failed", "error": str(e)}
 
-    # ── Full Stack Status ──────────────────────────────────────────────────────
     def full_status(self) -> dict:
-        """Return live status of every module in the Dominion stack."""
         uptime = round(time.time() - self._boot_time, 2)
         status = {
             "stack":            self.STACK_ID,
@@ -117,29 +123,37 @@ class DominionStack:
             "timestamp":        time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "modules": {
                 "siren":            siren.status(),
-                "pqslsi":           pqslsi.status(),
                 "hyperparameter":   hyperparameter_engine.status(),
                 "latent_mapper":    latent_mapper.status(),
                 "pqsvm":            pqsvm_status(),
                 "mcp_modules":      mcp.list_modules(),
                 "ledger_verified":  verify_chain(),
                 "architecture_registry": ARCHITECTURE_REGISTRY,
-                # v3: wired modules report their declaration status
                 "sin_network":            self._run_stage("sin_network_status",
                                                           sin_net.full_status),
                 "solva_network":          self._run_stage("solva_network_status",
                                                           solva_net.full_status),
                 "dominion_infrastructure": self._run_stage("dominion_infra_status",
                                                           dominion_infra.full_status),
+                "genesis_os":       self._run_stage("genesis_os_status",
+                                                    genesis_os_status),
+                "phoenix_os":       self._run_stage("phoenix_os_status",
+                                                    phoenix_os_status),
+                "os_consciousness": self._run_stage("os_consciousness_status",
+                                                    consciousness_status),
+                "os_dominion":      self._run_stage("os_dominion_status",
+                                                    dominion_os_status),
+                "os_sovereign":     self._run_stage("os_sovereign_status",
+                                                    sovereign_status),
+                "sovereign_os":     self._run_stage("sovereign_os_status",
+                                                    sovereign_os_status),
             },
             "ledger_length":    len(get_ledger()),
             "ops_logged":       len(self._ops_log),
         }
         return status
 
-    # ── Quantum Audit ─────────────────────────────────────────────────────────
     def quantum_audit(self) -> dict:
-        """Run full Jesse AI quantum audit across all IP, engines, modules."""
         log_event("[DOMINION] Quantum audit requested")
         audit = run_quantum_audit()
         create_event({"event": "QUANTUM_AUDIT", "systems": audit["systems_audited"],
@@ -147,54 +161,38 @@ class DominionStack:
         self._ops_log.append({"op": "quantum_audit", "ts": time.time()})
         return audit
 
-    # ── Process Command ───────────────────────────────────────────────────────
     def process(self, command: str, user: str = "jesse_martinez_jr") -> dict:
-        """Route a command through the full Dominion intelligence stack."""
         log_event(f"[DOMINION] Command received — user={user}")
-
-        # 1. Log to sovereign ledger
         ledger_block = create_event({"command": command, "user": user})
-
-        # 2. SIREN routing
         siren_result = siren.route(command)
-
-        # 3. PQSLSI encode
-        pqslsi_result = pqslsi.encode(command)
-
-        # 4. Latent mapping
         ls_result = latent_mapper.embed(ledger_block["hash"][:8], command)
-
-        # 5. Hyperparameter advisory
         hp_result = hyperparameter_engine.sample(strategy="bayesian")
-
-        # ── v3: wired agent stages (6-9) ───────────────────────────────────
-        # 6. Planner agent — decompose the command into steps
         stage_planner = self._run_stage("planner", planner_agent, command)
-
-        # 7. Builder agent — produce a build result (ledger-logged internally)
         stage_builder = self._run_stage("builder", builder_agent, command)
-
-        # 8. Guardian agent — authenticate user, sign + PQ-verify the command
         stage_guardian = self._run_stage("guardian", guardian_agent,
                                          command, user)
-
-        # 9. Memory agent — store the command in contextual memory
         stage_memory = self._run_stage("memory", memory_agent, command)
-
-        # ── v3: wired network / infrastructure stages (10-12) ─────────────
         net_ctx = {"command": command, "user": user}
-
-        # 10. SIN network integration
         stage_sin = self._run_stage("sin_network", sin_net.integrate, net_ctx)
-
-        # 11. SOLVA network integration
         stage_solva = self._run_stage("solva_network", solva_net.integrate,
                                       net_ctx)
-
-        # 12. Dominion infrastructure integration
         stage_infra = self._run_stage("dominion_infrastructure",
                                       dominion_infra.integrate, net_ctx)
-
+        os_ctx = {"command": command, "user": user}
+        stage_os_tests = self._run_stage("os_build_tests",
+                                         os_orch.run_all_build_tests)
+        stage_genesis_os = self._run_stage("genesis_os", genesis_os_int,
+                                           os_ctx)
+        stage_phoenix_os = self._run_stage("phoenix_os", phoenix_os_int,
+                                           os_ctx)
+        stage_consciousness = self._run_stage("os_consciousness",
+                                              consciousness_int, os_ctx)
+        stage_dominion_os = self._run_stage("os_dominion", dominion_os_int,
+                                            os_ctx)
+        stage_sovereign = self._run_stage("os_sovereign", sovereign_int,
+                                          os_ctx)
+        stage_sovereign_os = self._run_stage("sovereign_os", sovereign_os_int,
+                                             os_ctx)
         result = {
             "stack":        self.STACK_ID,
             "owner":        self.OWNER,
@@ -203,31 +201,34 @@ class DominionStack:
             "ledger_index": ledger_block["index"],
             "siren":        {"depth_reached": siren_result.get("depth"),
                              "anchors_ok":   siren_result.get("anchor_ok")},
-            "pqslsi":       {"embed_id":     pqslsi_result.get("embed_id"),
-                             "topology":     pqslsi_result.get("pq_topology")},
             "latent":       {"x": ls_result.get("topology", {}).get("mean"),
                              "magnitude": ls_result.get("topology", {}).get("magnitude")},
             "hp_advisory":  hp_result.get("params"),
-            # v3: agent stage results
             "agents": {
                 "planner":  stage_planner,
                 "builder":  stage_builder,
                 "guardian": stage_guardian,
                 "memory":   stage_memory,
             },
-            # v3: network / infrastructure stage results
             "networks": {
                 "sin_network":            stage_sin,
                 "solva_network":          stage_solva,
                 "dominion_infrastructure": stage_infra,
             },
+            "operating_systems": {
+                "build_tests":      stage_os_tests,
+                "genesis_os":       stage_genesis_os,
+                "phoenix_os":       stage_phoenix_os,
+                "os_consciousness": stage_consciousness,
+                "os_dominion":      stage_dominion_os,
+                "os_sovereign":     stage_sovereign,
+                "sovereign_os":     stage_sovereign_os,
+            },
             "timestamp":    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
-
         self._ops_log.append({"op": "process", "ts": time.time()})
         mcp.publish("dominion_core", "command_processed", result)
         return result
 
 
-# Singleton — the apex stack instance
 dominion = DominionStack()
