@@ -34,6 +34,7 @@ from api.pq_video import pq_video_router
 from api.agssi_core import agssi_router
 from api.dominion_tnc import tnc_router
 from api.demo_endpoint import router as demo_router
+from api.demo_files import router as demo_files_router
 
 app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
@@ -69,6 +70,7 @@ app.include_router(pq_video_router)
 app.include_router(agssi_router)
 app.include_router(tnc_router)
 app.include_router(demo_router)
+app.include_router(demo_files_router)
 
 
 class CommandRequest(BaseModel):
