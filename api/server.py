@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  video_quantum, video_sentient, game_engine, os_kernel,
                  ledger_immutable, unified_ledger_router, os_orchestrator,
-                 thought_trust)
+                 thought_trust, sovereign_model)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -567,6 +567,7 @@ _sovereign_ledger = ledger_immutable.ImmutableLedger("sovereign")
 _ledger_book_sync = unified_ledger_router.new_sync()
 _os_orchestrator = os_orchestrator.new_orchestrator()
 _thought_chain, _trust_chain = thought_trust.new_consciousness()
+_sovereign_runtime = sovereign_model.new_runtime()  # #49 sovereign-model runtime
 
 _FILE_UPLOAD_DIR = Path(__file__).resolve().parent.parent / "workspace" / "crs_uploads"
 try:
@@ -1132,4 +1133,85 @@ async def consciousness_trust_subject(subject: str):
     result = _trust_chain.get_by_subject(subject)
     if not result.get("ok"):
         return JSONResponse(status_code=404, content=result)
+    return result
+
+
+class SovereignMediateRequest(BaseModel):
+    prompt: str = ""
+    user: str = "jesse_martinez_jr"
+
+
+class SovereignGenerateRequest(BaseModel):
+    prompt: str = ""
+    user: str = "jesse_martinez_jr"
+    prefer_sovereign: bool = True
+    allow_relay_fallback: bool = True
+
+
+class SovereignWeightsRequest(BaseModel):
+    path: str = ""
+    sha256: str = ""
+    provenance: str = ""
+
+
+# ---- #49 Sovereign Model Runtime (100% sovereign model path) ----
+@app.get("/sovereign-model/status")
+async def sovereign_model_status():
+    status = sovereign_model.module_status()
+    status["sovereignty"] = _sovereign_runtime.sovereignty_status()
+    return status
+
+
+@app.get("/sovereign-model/sovereignty")
+async def sovereign_model_sovereignty():
+    return _sovereign_runtime.sovereignty_status()
+
+
+@app.get("/sovereign-model/backends")
+async def sovereign_model_backends():
+    return {"backends": _sovereign_runtime.list_backends()}
+
+
+@app.post("/sovereign-model/backends/{backend_id}/toggle")
+async def sovereign_model_backend_toggle(backend_id: str, enabled: bool = True):
+    result = _sovereign_runtime.set_backend_enabled(backend_id, enabled)
+    if not result.get("ok"):
+        return JSONResponse(status_code=404, content=result)
+    return result
+
+
+@app.post("/sovereign-model/mediate")
+async def sovereign_model_mediate(payload: SovereignMediateRequest):
+    result = _sovereign_runtime.mediate(payload.prompt, payload.user)
+    if not result.get("ok"):
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.post("/sovereign-model/generate")
+async def sovereign_model_generate(payload: SovereignGenerateRequest):
+    result = _sovereign_runtime.generate(
+        payload.prompt, payload.user, payload.prefer_sovereign,
+        payload.allow_relay_fallback)
+    if not result.get("ok"):
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.get("/sovereign-model/mediation/log")
+async def sovereign_model_mediation_log(limit: int = 50):
+    return {"log": _sovereign_runtime.mediation_log(limit)}
+
+
+@app.get("/sovereign-model/weights")
+async def sovereign_model_weights():
+    return {"weights": _sovereign_runtime.weights_manifest()}
+
+
+@app.post("/sovereign-model/weights/register")
+async def sovereign_model_weights_register(payload: SovereignWeightsRequest):
+    result = _sovereign_runtime.register_weights(
+        payload.path, payload.sha256, payload.provenance)
+    if not result.get("ok"):
+        return JSONResponse(status_code=400, content=result)
     return result
