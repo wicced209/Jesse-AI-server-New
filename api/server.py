@@ -16,7 +16,7 @@ from pydantic import BaseModel
 # Wired sovereign engine modules (stdlib-only; endpoints added directly below).
 from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  video_quantum, video_sentient, game_engine, os_kernel,
-                 ledger_immutable)
+                 ledger_immutable, unified_ledger_router)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -563,6 +563,7 @@ async def demo_command(payload: DemoCommandRequest):
 
 _sovereign_kernel = os_kernel.SovereignKernel()
 _sovereign_ledger = ledger_immutable.ImmutableLedger("sovereign")
+_ledger_book_sync = unified_ledger_router.new_sync()
 
 _FILE_UPLOAD_DIR = Path(__file__).resolve().parent.parent / "workspace" / "crs_uploads"
 try:
@@ -848,6 +849,73 @@ async def ledger_immutable_verify():
 async def ledger_immutable_head():
     return {"head_hash": _sovereign_ledger.head_hash(),
             "entries": len(_sovereign_ledger)}
+
+
+# ---- #19/#51 Unified Ledger-Book Sync Router ----
+def _live_ledger_book_state():
+    """Pull the live source module state (4 ledgers + 3 books). Crash-safe."""
+    try:
+        from api import sovereign_ledgers as _sl
+        ledgers = getattr(_sl, "_ledger_entries", {})
+        books = getattr(_sl, "_book_entries", {})
+        return (ledgers if isinstance(ledgers, dict) else {},
+                books if isinstance(books, dict) else {})
+    except Exception:
+        return ({}, {})
+
+
+@app.get("/ledger/unified/status")
+async def ledger_unified_status():
+    global _ledger_book_sync
+    if _ledger_book_sync is None:
+        _ledger_book_sync = unified_ledger_router.new_sync()
+    status = unified_ledger_router.module_status()
+    status["sync"] = _ledger_book_sync.status()
+    ledgers, books = _live_ledger_book_state()
+    status["live_sources"] = {k: (len(v) if isinstance(v, list) else 0)
+                              for k, v in {**ledgers, **books}.items()}
+    return status
+
+
+@app.post("/ledger/unified/sync")
+async def ledger_unified_sync():
+    global _ledger_book_sync
+    if _ledger_book_sync is None:
+        _ledger_book_sync = unified_ledger_router.new_sync()
+    ledgers, books = _live_ledger_book_state()
+    result = _ledger_book_sync.sync_all(ledgers, books)
+    result["head_hash"] = _ledger_book_sync.head_hash()
+    result["total_synced"] = len(_ledger_book_sync)
+    return result
+
+
+@app.get("/ledger/unified/verify")
+async def ledger_unified_verify():
+    if _ledger_book_sync is None:
+        return {"error": "Sync router not initialized"}
+    ledgers, books = _live_ledger_book_state()
+    return _ledger_book_sync.verify_sync(ledgers, books)
+
+
+@app.get("/ledger/unified/entries")
+async def ledger_unified_entries(limit: int = 50, source: str = ""):
+    if _ledger_book_sync is None:
+        return {"entries": [], "count": 0}
+    entries = _ledger_book_sync.get_entries(limit, source or None)
+    return {"entries": entries, "count": len(entries),
+            "total_synced": len(_ledger_book_sync)}
+
+
+@app.get("/ledger/unified/entry/{seal}")
+async def ledger_unified_entry(seal: str):
+    if _ledger_book_sync is None:
+        return JSONResponse(status_code=503,
+                            content={"error": "Sync router not initialized"})
+    entry = _ledger_book_sync.find_by_seal(seal)
+    if entry is None:
+        return JSONResponse(status_code=404,
+                            content={"error": "No synced entry for that seal"})
+    return {"entry": entry}
 
 
 # ---- #53 File upload/download (100MB, re-integrated directly) ----
