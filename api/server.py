@@ -22,6 +22,7 @@ from api.ota_updates import ota_router
 from api.pq_crypto import pq_router
 from api.sovereign_os import os_router, crs_router
 from api.guardian_eco import guardian_router
+from api.solva_godmode import solva_router
 
 app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
@@ -44,6 +45,7 @@ app.include_router(pq_router)
 app.include_router(os_router)
 app.include_router(crs_router)
 app.include_router(guardian_router)
+app.include_router(solva_router)
 
 
 class CommandRequest(BaseModel):
