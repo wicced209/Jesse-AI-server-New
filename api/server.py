@@ -16,7 +16,8 @@ from pydantic import BaseModel
 # Wired sovereign engine modules (stdlib-only; endpoints added directly below).
 from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  video_quantum, video_sentient, game_engine, os_kernel,
-                 ledger_immutable, unified_ledger_router, os_orchestrator)
+                 ledger_immutable, unified_ledger_router, os_orchestrator,
+                 thought_trust)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -565,6 +566,7 @@ _sovereign_kernel = os_kernel.SovereignKernel()
 _sovereign_ledger = ledger_immutable.ImmutableLedger("sovereign")
 _ledger_book_sync = unified_ledger_router.new_sync()
 _os_orchestrator = os_orchestrator.new_orchestrator()
+_thought_chain, _trust_chain = thought_trust.new_consciousness()
 
 _FILE_UPLOAD_DIR = Path(__file__).resolve().parent.parent / "workspace" / "crs_uploads"
 try:
@@ -982,6 +984,20 @@ class OSBusMessageRequest(BaseModel):
     message: str = ""
 
 
+class ThoughtRecordRequest(BaseModel):
+    thought: str = ""
+    actor: str = "consciousness-os"
+    context: str = ""
+
+
+class TrustEvalRequest(BaseModel):
+    subject: str = ""
+    dimensions: dict = {}
+    engine: str = "quantum-trust-engine"
+    weights: dict = {}
+    thought_refs: list = []
+
+
 @app.get("/oshub/status")
 async def oshub_status():
     status = os_orchestrator.module_status()
@@ -1052,3 +1068,68 @@ async def oshub_health():
 @app.get("/oshub/log")
 async def oshub_log(limit: int = 50):
     return _os_orchestrator.get_log(limit)
+
+
+# ---- #23 Thought Chain + Trust Chain (Consciousness OS) ----
+@app.get("/consciousness/status")
+async def consciousness_status():
+    status = thought_trust.module_status()
+    status["thought_count"] = len(_thought_chain)
+    status["eval_count"] = len(_trust_chain)
+    return status
+
+
+@app.post("/consciousness/thought/record")
+async def consciousness_thought_record(payload: ThoughtRecordRequest):
+    result = _thought_chain.record(payload.thought, payload.actor,
+                                   payload.context)
+    if not result.get("ok"):
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.get("/consciousness/thought/chain")
+async def consciousness_thought_chain(limit: int = 50):
+    return _thought_chain.get_chain(limit)
+
+
+@app.get("/consciousness/thought/verify")
+async def consciousness_thought_verify():
+    return _thought_chain.verify()
+
+
+@app.get("/consciousness/thought/{thought_id}")
+async def consciousness_thought_by_id(thought_id: str):
+    result = _thought_chain.get_by_id(thought_id)
+    if not result.get("ok"):
+        return JSONResponse(status_code=404, content=result)
+    return result
+
+
+@app.post("/consciousness/trust/evaluate")
+async def consciousness_trust_evaluate(payload: TrustEvalRequest):
+    result = _trust_chain.evaluate(payload.subject, payload.dimensions,
+                                   engine=payload.engine or "quantum-trust-engine",
+                                   weights=payload.weights or None,
+                                   thought_refs=payload.thought_refs or None)
+    if not result.get("ok"):
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.get("/consciousness/trust/chain")
+async def consciousness_trust_chain(limit: int = 50):
+    return _trust_chain.get_chain(limit)
+
+
+@app.get("/consciousness/trust/verify")
+async def consciousness_trust_verify():
+    return _trust_chain.verify()
+
+
+@app.get("/consciousness/trust/subject/{subject}")
+async def consciousness_trust_subject(subject: str):
+    result = _trust_chain.get_by_subject(subject)
+    if not result.get("ok"):
+        return JSONResponse(status_code=404, content=result)
+    return result
