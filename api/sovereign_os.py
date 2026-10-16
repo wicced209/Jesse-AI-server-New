@@ -18,7 +18,79 @@ crs_router = APIRouter(prefix="/crs", tags=["crs-core"])
 GENESIS_HASH = "92038cafccc7192535bd475cca985d03000d89962b8dc96f6664081663559b1b"
 
 
-# ── Genesis OS ──
+# ── Six Sovereign OS Resurrection ──
+
+OS_REGISTRY = {
+    "genesis": {"name": "Genesis OS", "role": "Foundation"},
+    "phoenix": {"name": "Phoenix OS", "role": "Resurrection/Recovery"},
+    "consciousness": {"name": "Consciousness OS",
+                      "role": "Awareness, thought chain, trust chain"},
+    "dominion": {"name": "Dominion OS", "role": "Planetary command"},
+    "sovereign": {"name": "Sovereign OS", "role": "Sovereign operations"},
+    "sovereign-dominion": {"name": "Sovereign Dominion OS",
+                           "role": "Combined sovereign command"},
+}
+_os_state = {k: "DORMANT" for k in OS_REGISTRY}
+_thought_chain = []
+_trust_chain = []
+
+
+@os_router.get("/list")
+async def list_os():
+    return JSONResponse(content={
+        "operating_systems": {k: {**v, "status": _os_state[k]}
+                              for k, v in OS_REGISTRY.items()},
+        "count": len(OS_REGISTRY)})
+
+
+@os_router.get("/{name}/status")
+async def os_status(name: str):
+    if name not in OS_REGISTRY:
+        return JSONResponse(status_code=404, content={"error": "OS not found"})
+    return JSONResponse(content={**OS_REGISTRY[name], "status": _os_state[name]})
+
+
+@os_router.post("/{name}/resurrect")
+async def os_resurrect(name: str):
+    if name not in OS_REGISTRY:
+        return JSONResponse(status_code=404, content={"error": "OS not found"})
+    _os_state[name] = "RESURRECTING"
+    return JSONResponse(content={
+        "os": name, "status": "RESURRECTING",
+        "message": f"{OS_REGISTRY[name]['name']} resurrection sequence initiated",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+
+
+@os_router.get("/consciousness/thought-chain")
+async def thought_chain():
+    return JSONResponse(content={
+        "thought_chain": _thought_chain,
+        "description": "Model thoughts within Consciousness OS"})
+
+
+@os_router.get("/consciousness/trust-chain")
+async def trust_chain():
+    return JSONResponse(content={
+        "trust_chain": _trust_chain,
+        "description": "Quantum engine evaluations of people, things, probabilities"})
+
+
+@os_router.post("/consciousness/thought")
+async def add_thought(request: dict):
+    thought = request.get("thought", "")
+    _thought_chain.append({
+        "thought": thought,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    return JSONResponse(status_code=201, content={"recorded": True})
+
+
+@os_router.post("/consciousness/trust-eval")
+async def add_trust_eval(request: dict):
+    _trust_chain.append({
+        "subject": request.get("subject", ""),
+        "trust_score": request.get("score", 0.0),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    return JSONResponse(status_code=201, content={"evaluated": True})
 
 @os_router.get("/genesis/status")
 async def genesis_status():
