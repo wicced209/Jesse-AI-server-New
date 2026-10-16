@@ -28,6 +28,7 @@ from api.media_engines import media_router
 from api.module_registry import registry_router
 from api.dominion_corridor import corridor_router
 from api.janet_protocol import janet_router
+from api.sovereign_ledgers import ledger_router, book_router
 
 app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
@@ -56,6 +57,8 @@ app.include_router(media_router)
 app.include_router(registry_router)
 app.include_router(corridor_router)
 app.include_router(janet_router)
+app.include_router(ledger_router)
+app.include_router(book_router)
 
 
 class CommandRequest(BaseModel):
