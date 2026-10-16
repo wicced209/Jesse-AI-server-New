@@ -1234,7 +1234,14 @@ def _relay_secrets():
 
 
 def _relay_base_url(request: Request):
-    return str(request.base_url).rstrip("/")
+    base = str(request.base_url).rstrip("/")
+    # Behind Railway's TLS-terminating proxy the internal scheme is http.
+    # Probes must use the public https URL: an http->https 301/302 makes
+    # urllib downgrade POST to GET, which POST-only routes answer with 405.
+    # Localhost keeps http (no TLS in local dev).
+    if base.startswith("http://") and "localhost" not in base and "127.0.0.1" not in base:
+        base = "https://" + base[len("http://"):]
+    return base
 
 
 class RelayProbeRequest(BaseModel):
