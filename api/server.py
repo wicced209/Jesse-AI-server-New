@@ -535,10 +535,11 @@ async def demo_command(payload: DemoCommandRequest):
                 response_text = None
         if not response_text:
             response_text = f"Command '{cmd}' processed by CRSMCPAI Alpha."
+        response_text = str(response_text).rstrip() + "\n\nVerification: sovereign living master key Jesse Martinez Junior."
         return {
             "demo": True,
             "command": cmd[:200],
-            "jesse_ai_response": str(response_text),
+            "jesse_ai_response": response_text,
             "execution_ms": round((time.time() - start) * 1000, 2),
         }
     except Exception as e:
