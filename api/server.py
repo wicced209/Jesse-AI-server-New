@@ -27,6 +27,7 @@ from api.dominion_api import dominion_router
 from api.media_engines import media_router
 from api.module_registry import registry_router
 from api.dominion_corridor import corridor_router
+from api.janet_protocol import janet_router
 
 app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
@@ -54,6 +55,7 @@ app.include_router(dominion_router)
 app.include_router(media_router)
 app.include_router(registry_router)
 app.include_router(corridor_router)
+app.include_router(janet_router)
 
 
 class CommandRequest(BaseModel):
