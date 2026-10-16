@@ -7,6 +7,7 @@
 """
 import os
 import time
+import asyncio
 import base64
 from pathlib import Path
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, UploadFile, File
@@ -17,7 +18,7 @@ from pydantic import BaseModel
 from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  video_quantum, video_sentient, game_engine, os_kernel,
                  ledger_immutable, unified_ledger_router, os_orchestrator,
-                 thought_trust, sovereign_model)
+                 thought_trust, sovereign_model, relay_supervisor, arc_tools)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -1215,3 +1216,118 @@ async def sovereign_model_weights_register(payload: SovereignWeightsRequest):
     if not result.get("ok"):
         return JSONResponse(status_code=400, content=result)
     return result
+
+
+# ============================================================================
+# Jesse's restoration priority #1 (2026-10-16): Relay Reconnection Supervisor
+# Reconnect ALL relays and communication paths — every relay, every channel.
+# ============================================================================
+_relay_supervisor = relay_supervisor.RelaySupervisor()
+_arc_registry = arc_tools.ArcRegistry()
+
+
+def _relay_secrets():
+    return {
+        "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", ""),
+        "GROQ_API_KEY": os.environ.get("GROQ_API_KEY", ""),
+    }
+
+
+def _relay_base_url(request: Request):
+    return str(request.base_url).rstrip("/")
+
+
+class RelayProbeRequest(BaseModel):
+    channel_id: str = ""
+
+
+@app.get("/relay/status")
+async def relay_status():
+    return _relay_supervisor.status()
+
+
+@app.get("/relay/channels")
+async def relay_channels():
+    return _relay_supervisor.status()["channels"]
+
+
+@app.post("/relay/probe")
+async def relay_probe(payload: RelayProbeRequest, request: Request):
+    # Probes are blocking socket I/O; run in a thread so the loop stays free
+    # to serve the nested self-probes (no self-deadlock).
+    base = _relay_base_url(request)
+    secrets = _relay_secrets()
+    if not payload.channel_id:
+        result = await asyncio.to_thread(
+            _relay_supervisor.probe_all, base, secrets)
+        return {"ok": True, "channels": result}
+    return await asyncio.to_thread(
+        _relay_supervisor.probe_one, payload.channel_id, base, secrets)
+
+
+@app.post("/relay/reconnect/{channel_id}")
+async def relay_reconnect(channel_id: str, request: Request):
+    return await asyncio.to_thread(
+        _relay_supervisor.reconnect, channel_id,
+        _relay_base_url(request), _relay_secrets())
+
+
+@app.post("/relay/reconnect-all")
+async def relay_reconnect_all(request: Request):
+    return await asyncio.to_thread(
+        _relay_supervisor.reconnect_all,
+        _relay_base_url(request), _relay_secrets())
+
+
+@app.get("/relay/history")
+async def relay_history(limit: int = 50):
+    return _relay_supervisor.history_log(limit)
+
+
+# ============================================================================
+# Jesse's restoration priority #2 (2026-10-16): All 16 ARC tools as real code
+# Prerequisite for everything else in the restoration plan.
+# ============================================================================
+class ArcOperateRequest(BaseModel):
+    tool_id: str = ""
+    action: str = ""
+    params: dict = {}
+
+
+@app.get("/arc/status")
+async def arc_status():
+    return _arc_registry.status()
+
+
+@app.get("/arc/tools")
+async def arc_tools_list():
+    return {"tools": _arc_registry.list_tools()}
+
+
+@app.get("/arc/tools/{tool_id}")
+async def arc_tool_describe(tool_id: str):
+    result = _arc_registry.describe(tool_id)
+    if not result.get("ok"):
+        return JSONResponse(status_code=404, content=result)
+    return result
+
+
+@app.post("/arc/operate")
+async def arc_operate(payload: ArcOperateRequest):
+    result = await asyncio.to_thread(
+        _arc_registry.operate,
+        payload.tool_id, payload.action, payload.params or {},
+        "jesse_martinez_jr")
+    if not result.get("ok"):
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.get("/arc/events")
+async def arc_events(limit: int = 50):
+    return _arc_registry.events_log(limit)
+
+
+@app.get("/arc/verify")
+async def arc_verify():
+    return _arc_registry.verify()
