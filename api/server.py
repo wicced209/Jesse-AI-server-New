@@ -20,6 +20,7 @@ from api.mesh import router as mesh_router
 from api.mesh_ws import router as mesh_ws_router
 from api.ota_updates import ota_router
 from api.pq_crypto import pq_router
+from api.sovereign_os import os_router, crs_router
 
 app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
@@ -39,6 +40,8 @@ app.include_router(mesh_router)
 app.include_router(mesh_ws_router)
 app.include_router(ota_router)
 app.include_router(pq_router)
+app.include_router(os_router)
+app.include_router(crs_router)
 
 
 class CommandRequest(BaseModel):
