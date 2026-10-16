@@ -32,6 +32,7 @@ from api.sovereign_ledgers import ledger_router, book_router
 from api.pq_audio import pq_audio_router
 from api.pq_video import pq_video_router
 from api.agssi_core import agssi_router
+from api.dominion_tnc import tnc_router
 
 app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
@@ -65,6 +66,7 @@ app.include_router(book_router)
 app.include_router(pq_audio_router)
 app.include_router(pq_video_router)
 app.include_router(agssi_router)
+app.include_router(tnc_router)
 
 
 class CommandRequest(BaseModel):
