@@ -16,7 +16,7 @@ from pydantic import BaseModel
 # Wired sovereign engine modules (stdlib-only; endpoints added directly below).
 from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  video_quantum, video_sentient, game_engine, os_kernel,
-                 ledger_immutable, unified_ledger_router)
+                 ledger_immutable, unified_ledger_router, os_orchestrator)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -564,6 +564,7 @@ async def demo_command(payload: DemoCommandRequest):
 _sovereign_kernel = os_kernel.SovereignKernel()
 _sovereign_ledger = ledger_immutable.ImmutableLedger("sovereign")
 _ledger_book_sync = unified_ledger_router.new_sync()
+_os_orchestrator = os_orchestrator.new_orchestrator()
 
 _FILE_UPLOAD_DIR = Path(__file__).resolve().parent.parent / "workspace" / "crs_uploads"
 try:
@@ -968,3 +969,86 @@ async def files_download(filename: str):
     except Exception as e:
         log_event(f"[FILES] download error: {e}", "warning")
         return JSONResponse(status_code=500, content={"error": "Download unavailable."})
+
+
+# ---- #21/#52 Six OS Orchestration Hub (wired directly; no router files) ----
+class OSActionRequest(BaseModel):
+    os: str = ""
+
+
+class OSBusMessageRequest(BaseModel):
+    source: str = ""
+    target: str = ""
+    message: str = ""
+
+
+@app.get("/oshub/status")
+async def oshub_status():
+    status = os_orchestrator.module_status()
+    status["hub"] = _os_orchestrator.overview()
+    return status
+
+
+@app.post("/oshub/boot")
+async def oshub_boot(payload: OSActionRequest):
+    result = _os_orchestrator.boot(payload.os)
+    if not result.get("ok"):
+        return JSONResponse(status_code=404, content=result)
+    return result
+
+
+@app.post("/oshub/resurrect")
+async def oshub_resurrect(payload: OSActionRequest):
+    result = _os_orchestrator.resurrect(payload.os)
+    if not result.get("ok"):
+        return JSONResponse(status_code=404, content=result)
+    return result
+
+
+@app.post("/oshub/resurrect-all")
+async def oshub_resurrect_all():
+    return _os_orchestrator.resurrect_all()
+
+
+@app.post("/oshub/suspend")
+async def oshub_suspend(payload: OSActionRequest):
+    result = _os_orchestrator.suspend(payload.os)
+    if not result.get("ok"):
+        return JSONResponse(status_code=404, content=result)
+    return result
+
+
+@app.post("/oshub/resume")
+async def oshub_resume(payload: OSActionRequest):
+    result = _os_orchestrator.resume(payload.os)
+    if not result.get("ok"):
+        return JSONResponse(status_code=404, content=result)
+    return result
+
+
+@app.post("/oshub/message")
+async def oshub_message(payload: OSBusMessageRequest):
+    result = _os_orchestrator.send_message(payload.source, payload.target,
+                                           payload.message)
+    if not result.get("ok"):
+        code = 404 if "not found" in result.get("error", "") else 400
+        return JSONResponse(status_code=code, content=result)
+    return result
+
+
+@app.get("/oshub/messages")
+async def oshub_messages(os: str = "", limit: int = 20):
+    result = _os_orchestrator.read_mailbox(os, limit)
+    if not result.get("ok"):
+        return JSONResponse(status_code=404, content=result)
+    return result
+
+
+@app.get("/oshub/health")
+async def oshub_health():
+    return _os_orchestrator.health_check()
+
+
+@app.get("/oshub/log")
+async def oshub_log(limit: int = 50):
+    return _os_orchestrator.get_log(limit)
