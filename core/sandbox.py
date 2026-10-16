@@ -20,18 +20,34 @@ from contextlib import redirect_stdout, redirect_stderr
 from core.logger import log_event
 
 # Modules the sandbox is allowed to import. Everything else is blocked.
+# Expanded for sovereign builds: includes web frameworks, data validation,
+# async support, and crypto so Jesse AI can build API modules through /build.
 ALLOWED_IMPORTS = frozenset({
     "math", "random", "datetime", "json", "re", "collections",
     "itertools", "functools", "operator", "string", "decimal",
     "fractions", "statistics", "hashlib", "hmac", "base64",
     "uuid", "time", "calendar", "textwrap", "unicodedata",
+    # Web framework and API building
+    "fastapi", "pydantic", "starlette", "typing",
+    # Async and concurrency
+    "asyncio", "threading", "queue",
+    # Data handling
+    "dataclasses", "enum", "copy", "pprint",
+    # Crypto (safe subset)
+    "secrets", "nacl",
+    # URL and networking data structures (no socket execution)
+    "urllib", "ipaddress",
+    # Logging
+    "logging",
 })
 
 # Names that can never appear in executed code.
+# Note: setattr/delattr removed — needed for normal Pydantic/FastAPI model
+# building. getattr/hasattr remain blocked to prevent introspection attacks.
 BLOCKED_NAMES = frozenset({
     "open", "exec", "eval", "compile", "__import__", "input",
     "exit", "quit", "help", "dir", "globals", "locals", "vars",
-    "getattr", "setattr", "delattr", "hasattr", "memoryview",
+    "getattr", "hasattr", "memoryview",
     "breakpoint",
 })
 
@@ -96,10 +112,15 @@ def _safe_builtins():
         "iter", "len", "list", "map", "max", "min", "next", "oct",
         "ord", "pow", "print", "range", "repr", "reversed", "round",
         "set", "slice", "sorted", "str", "sum", "tuple", "type", "zip",
+        "setattr", "delattr",
         "Exception", "ValueError", "TypeError", "KeyError", "IndexError",
         "AttributeError", "RuntimeError", "StopIteration",
     ]
     safe = {n: getattr(builtins, n) for n in safe_names if hasattr(builtins, n)}
+
+    # __build_class__ is required for `class` statements to work.
+    # Without it, no class definitions are possible in sandbox code.
+    safe["__build_class__"] = builtins.__build_class__
 
     # Guarded __import__: the AST gate already rejected non-allowlisted
     # imports at parse time; this is defense in depth for dynamic imports.
