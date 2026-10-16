@@ -6,6 +6,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 import os
+import time
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -496,3 +497,53 @@ async def send_pulse(req: PulseRequest):
         "note": "Nodes respond via POST /telemetry. "
                 "Query results via POST /command.",
     }
+
+
+# =====================================================================
+# SOVEREIGN DEMO ENDPOINTS - Public website demo (no auth required)
+# =====================================================================
+class DemoCommandRequest(BaseModel):
+    command: str
+    use_llm: bool = True
+
+
+@app.get("/demo/status")
+async def demo_status():
+    return {
+        "status": "ONLINE",
+        "system": "CRSMCPAI Alpha / Jesse AI",
+        "demo": True,
+        "timestamp": time.time(),
+    }
+
+
+@app.post("/demo/command")
+async def demo_command(payload: DemoCommandRequest):
+    start = time.time()
+    try:
+        cmd = payload.command.strip()[:2000]
+        stack_result = dominion.process(cmd, "demo_visitor")
+        response_text = None
+        if payload.use_llm:
+            try:
+                response_text = generate(
+                    f"CRSMCPAI Alpha demo from public visitor:\n{cmd}\n\n"
+                    f"Respond helpfully as Jesse AI. This is a public demo.",
+                    history="",
+                )
+            except Exception:
+                response_text = None
+        if not response_text:
+            response_text = f"Command '{cmd}' processed by CRSMCPAI Alpha."
+        return {
+            "demo": True,
+            "command": cmd[:200],
+            "jesse_ai_response": str(response_text),
+            "execution_ms": round((time.time() - start) * 1000, 2),
+        }
+    except Exception as e:
+        log_event(f"[DEMO] Error: {e}", "warning")
+        return JSONResponse(status_code=500, content={
+            "demo": True,
+            "error": "Demo temporarily unavailable.",
+        })
