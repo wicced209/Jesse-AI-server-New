@@ -18,6 +18,7 @@ from security.auth import authenticate
 from admin.admin_routes import router as admin_router
 from api.mesh import router as mesh_router
 from api.mesh_ws import router as mesh_ws_router
+from api.ota_updates import ota_router
 
 app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
@@ -35,6 +36,7 @@ app.add_middleware(
 app.include_router(admin_router)
 app.include_router(mesh_router)
 app.include_router(mesh_ws_router)
+app.include_router(ota_router)
 
 
 class CommandRequest(BaseModel):
