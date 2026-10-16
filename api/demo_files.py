@@ -23,7 +23,7 @@ UPLOAD_DIR = "/tmp/jesse_demo_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Limits
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 FILE_TTL_HOURS = 24
 ALLOWED_EXTENSIONS = {
     ".txt", ".md", ".json", ".csv", ".pdf",
@@ -70,7 +70,7 @@ def _cleanup_expired():
 
 @router.post("/demo/upload")
 async def demo_upload(request: Request, file: UploadFile = File(...)):
-    """Upload a file through the public demo. 10MB max, 24h expiry."""
+    """Upload a file through the public demo. 100MB max, 24h expiry."""
     ip = _client_ip(request)
 
     if not _check_rate_limit(ip):
@@ -92,7 +92,7 @@ async def demo_upload(request: Request, file: UploadFile = File(...)):
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         return JSONResponse(status_code=400, content={
-            "error": "File too large. Maximum 10 MB.",
+            "error": "File too large. Maximum 100 MB.",
             "demo": True,
         })
 
