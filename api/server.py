@@ -226,8 +226,10 @@ class BuildRequest(BaseModel):
 async def autonomous_build(req: BuildRequest):
     """
     Fully autonomous internal build. Plans, generates code, executes it
-    inside the sovereign sandbox, and returns real results. 100% internal
-    to CRSMCPAI Alpha — no outside hands.
+    inside the sovereign sandbox, runs the Quad Check / Quad Validate
+    (4C/4V) gate, and returns real results. 100% internal
+    to CRSMCPAI Alpha — no outside hands. A build is only SUCCESS when
+    it both completed AND passed all 8 gates.
     """
     log_event(f"[API] Autonomous build: user={req.user} cmd={req.command[:80]}")
 
@@ -279,6 +281,16 @@ async def autonomous_build(req: BuildRequest):
         except Exception as e:
             log_event(f"[MEMORY] failed to store reply: {e}", "warning")
 
+    # 4C/4V gate verdict decides the release. SUCCESS only when the build
+    # completed AND every gate passed; otherwise the build is held.
+    gate_verdict = (build_result.get("gate") or {}).get("verdict")
+    if build_result.get("all_ok") and gate_verdict == "GO":
+        build_status, gate_release = "SUCCESS", "RELEASED"
+    elif build_result.get("all_ok"):
+        build_status, gate_release = "GATED", "HELD_BY_GATE"
+    else:
+        build_status, gate_release = "PARTIAL", "HELD_BY_GATE"
+
     return {
         "CRSMCPAI_ALPHA": "AUTONOMOUS_BUILD_EXECUTED",
         "execution_engine": "CRSMCPAI_ALPHA_V2",
@@ -288,7 +300,9 @@ async def autonomous_build(req: BuildRequest):
         "owner": SOVEREIGN_OWNER,
         "build_result": build_result,
         "jesse_ai_response": llm_response,
-        "status": "SUCCESS" if build_result.get("all_ok") else "PARTIAL",
+        "gate_verdict": gate_verdict,
+        "gate_release": gate_release,
+        "status": build_status,
     }
 
 

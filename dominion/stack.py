@@ -191,6 +191,9 @@ class DominionStack:
                 "stderr": (built.get("stderr") or "")[:1000],
                 "result": built.get("result"),
                 "attempts_used": built.get("attempts_used"),
+                # 4C/4V gate inputs: the generated artifact and its timing.
+                "code": built.get("code"),
+                "elapsed_ms": built.get("elapsed_ms"),
             })
             # Feed successful output into the next step's context.
             if built.get("status") == "ok" or built.get("status") == "executed":
@@ -200,13 +203,30 @@ class DominionStack:
 
         all_ok = all(s["status"] in ("ok", "executed") for s in step_results)
         elapsed_ms = int((time.time() - started) * 1000)
+
+        # 3. Quad Check / Quad Validate gate (4C/4V) — Jesse's standing
+        # build standard. Fails closed: a gate error is a NO_GO.
+        try:
+            from core.build_gate import run_build_gate
+            gate = run_build_gate(
+                {"steps": step_results, "all_ok": all_ok,
+                 "elapsed_ms": elapsed_ms, "command": command},
+                user,
+            )
+        except Exception as e:
+            log_event(f"[DOMINION] Build gate error, failing closed: {e}",
+                      "warning")
+            gate = {"gate_version": "4C4V-v1.0", "verdict": "NO_GO",
+                    "gates": [], "sha256": {}, "error": str(e)}
+
         create_event({"event": "AUTONOMOUS_BUILD_COMPLETE",
                       "command": command, "user": user,
                       "all_ok": all_ok, "steps": len(steps),
-                      "elapsed_ms": elapsed_ms})
+                      "elapsed_ms": elapsed_ms,
+                      "gate_verdict": gate.get("verdict")})
         self._ops_log.append({"op": "autonomous_build", "ts": time.time()})
         log_event(f"[DOMINION] Autonomous build {'COMPLETE' if all_ok else 'PARTIAL'} "
-                  f"in {elapsed_ms}ms")
+                  f"in {elapsed_ms}ms — 4C/4V gate: {gate.get('verdict')}")
 
         return {
             "autonomous": True,
@@ -219,6 +239,8 @@ class DominionStack:
                                    if s["status"] in ("ok", "executed")),
             "steps_total": len(step_results),
             "elapsed_ms": elapsed_ms,
+            # 4C/4V gate report — GO only when all 8 gates pass.
+            "gate": gate,
         }
 
     def process(self, command: str, user: str = "jesse_martinez_jr") -> dict:
