@@ -27,6 +27,8 @@ ALLOWED_IMPORTS = frozenset({
     "itertools", "functools", "operator", "string", "decimal",
     "fractions", "statistics", "hashlib", "hmac", "base64",
     "uuid", "time", "calendar", "textwrap", "unicodedata",
+    # Binary and media generation (safe stdlib, no I/O)
+    "struct", "wave", "io", "array",
     # Web framework and API building
     "fastapi", "pydantic", "starlette", "typing",
     # Async and concurrency
