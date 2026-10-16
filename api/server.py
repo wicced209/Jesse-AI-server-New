@@ -30,6 +30,7 @@ from api.dominion_corridor import corridor_router
 from api.janet_protocol import janet_router
 from api.sovereign_ledgers import ledger_router, book_router
 from api.pq_audio import pq_audio_router
+from api.pq_video import pq_video_router
 from api.agssi_core import agssi_router
 
 app = FastAPI(
@@ -62,6 +63,7 @@ app.include_router(janet_router)
 app.include_router(ledger_router)
 app.include_router(book_router)
 app.include_router(pq_audio_router)
+app.include_router(pq_video_router)
 app.include_router(agssi_router)
 
 
