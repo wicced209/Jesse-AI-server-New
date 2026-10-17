@@ -18,7 +18,8 @@ from pydantic import BaseModel
 from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  video_quantum, video_sentient, game_engine, os_kernel,
                  ledger_immutable, unified_ledger_router, os_orchestrator,
-                 thought_trust, sovereign_model, relay_supervisor, arc_tools)
+                 thought_trust, sovereign_model, relay_supervisor, arc_tools,
+                 email_messenger)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -1338,3 +1339,55 @@ async def arc_events(limit: int = 50):
 @app.get("/arc/verify")
 async def arc_verify():
     return _arc_registry.verify()
+
+
+# ── Jesse AI Email Messenger (Directive #72) ──────────────────────────────
+# Free voice-first messenger through CRS architecture.
+# Poller (cron on agent VM) -> POST /messenger/receive -> reply via Gmail.
+
+class MessengerReceiveRequest(BaseModel):
+    message_id: str
+    sender: str
+    subject: str = ""
+    body: str = ""
+
+
+@app.get("/messenger/status")
+async def messenger_status():
+    return email_messenger.messenger_status()
+
+
+@app.post("/messenger/receive")
+async def messenger_receive(req: MessengerReceiveRequest):
+    """Accept a command email from the poller, execute via CRSMCPAI Alpha."""
+    sender = (req.sender or "").strip().lower()
+    if sender not in email_messenger.ALLOWED_SENDERS:
+        return JSONResponse(status_code=403, content={
+            "ok": False, "error": "sender not allowlisted"})
+    if not email_messenger.is_command_email(req.sender, req.subject, req.body):
+        return JSONResponse(status_code=400, content={
+            "ok": False, "error": "not a command email"})
+    if email_messenger.mark_processed(req.message_id):
+        return {"ok": False, "duplicate": True,
+                "message_id": req.message_id}
+    cmd_text = email_messenger.extract_command(req.subject, req.body)
+    # Execute through the local /command pipeline.
+    cmd_req = CommandRequest(command=cmd_text, user="jesse_martinez_jr",
+                             use_llm=True)
+    result = await command(cmd_req)
+    ledger_index = None
+    try:
+        ledger_index = result.get("stack_execution", {}).get("ledger_index")
+    except Exception:
+        pass
+    reply_body = email_messenger.build_reply_body(cmd_text, result,
+                                                  ledger_index)
+    return {
+        "ok": True,
+        "message_id": req.message_id,
+        "command": cmd_text,
+        "ledger_index": ledger_index,
+        "reply_to": email_messenger.REPLY_TO,
+        "reply_subject": email_messenger.build_reply_subject(req.subject),
+        "reply_body": reply_body,
+    }
