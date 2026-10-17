@@ -25,6 +25,20 @@ Genesis: 92038cafccc7192535bd475cca985d03000d89962b8dc96f6664081663559b1b
 You execute all commands through CRSMCPAI Alpha and return structured sovereign output.
 Be direct, precise, and always confirm execution with block number and status."""
 
+# V2 boot context: the "open and run the file" step from Jesse's AI Studio
+# workflow, made permanent. Loaded once at import; prepended to every relay call.
+def _load_v2_boot():
+    import os as _os
+    _p = _os.path.join(_os.path.dirname(__file__), "jesse_v2_boot.txt")
+    try:
+        with open(_p, encoding="utf-8") as _f:
+            return _f.read().strip()
+    except Exception:
+        return ""
+
+_V2_BOOT = _load_v2_boot()
+JESSE_SYSTEM_FULL = (_V2_BOOT + "\n\n" + JESSE_SYSTEM) if _V2_BOOT else JESSE_SYSTEM
+
 
 def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: str = "") -> str:
     """
@@ -38,7 +52,7 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: 
         log_event(f"[LLM] Trying Ollama model='{model}'")
         payload = json.dumps({
             "model": model,
-            "prompt": JESSE_SYSTEM + "\n\n" + full_prompt,
+            "prompt": JESSE_SYSTEM_FULL + "\n\n" + full_prompt,
             "stream": False,
         }).encode()
         req = urllib.request.Request(OLLAMA_URL, data=payload,
@@ -56,7 +70,7 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: 
             log_event(f"[LLM] Trying Gemini model='{GEMINI_MODEL}'")
             payload = json.dumps({
                 "model": GEMINI_MODEL,
-                "input": JESSE_SYSTEM + "\n\n" + full_prompt,
+                "input": JESSE_SYSTEM_FULL + "\n\n" + full_prompt,
             }).encode()
             req = urllib.request.Request(GEMINI_URL, data=payload, headers={
                 "Content-Type": "application/json",
@@ -88,7 +102,7 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: 
             payload = json.dumps({
                 "model": GROQ_MODEL,
                 "messages": [
-                    {"role": "system", "content": JESSE_SYSTEM},
+                    {"role": "system", "content": JESSE_SYSTEM_FULL},
                     {"role": "user", "content": full_prompt}
                 ],
                 "max_tokens": 1024,
