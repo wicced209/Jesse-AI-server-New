@@ -1,0 +1,223 @@
+[
+  {
+    "index": 0,
+    "ts": 1792138735.3332684,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "92038cafccc7192535bd475cca985d03000d89962b8dc96f6664081663559b1b",
+    "block_hash": "1125af4299577d8e9382039379ef7b7ad8b8482a92f21ece6c6f55b66474a190d991b6420057aa3637ffe4336a3f08317984a69d6352f3da8953e098a352fceb",
+    "hash": "1125af4299577d8e9382039379ef7b7ad8b8482a92f21ece6c6f55b66474a190d991b6420057aa3637ffe4336a3f08317984a69d6352f3da8953e098a352fceb"
+  },
+  {
+    "index": 1,
+    "ts": 1792138748.7323685,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "1125af4299577d8e9382039379ef7b7ad8b8482a92f21ece6c6f55b66474a190d991b6420057aa3637ffe4336a3f08317984a69d6352f3da8953e098a352fceb",
+    "block_hash": "b80822291f116a99328df6e1562d31ed4055fede6965e540e2b1df95d1bb922b13793dde6b09738f75cbd5baf8f63ca81779e6d80a223b43de46cd77b7ed67fa",
+    "hash": "b80822291f116a99328df6e1562d31ed4055fede6965e540e2b1df95d1bb922b13793dde6b09738f75cbd5baf8f63ca81779e6d80a223b43de46cd77b7ed67fa"
+  },
+  {
+    "index": 2,
+    "ts": 1792138763.3422163,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "b80822291f116a99328df6e1562d31ed4055fede6965e540e2b1df95d1bb922b13793dde6b09738f75cbd5baf8f63ca81779e6d80a223b43de46cd77b7ed67fa",
+    "block_hash": "86201a0a584bca078a001f098bf392550d23947e0e6e70fc0d4a3f9a9f3022e5455e4894ff30f966f4bd720b4f91bda3427365ba99003e1b43bb39b0cd692472",
+    "hash": "86201a0a584bca078a001f098bf392550d23947e0e6e70fc0d4a3f9a9f3022e5455e4894ff30f966f4bd720b4f91bda3427365ba99003e1b43bb39b0cd692472"
+  },
+  {
+    "index": 3,
+    "ts": 1792138833.286981,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "86201a0a584bca078a001f098bf392550d23947e0e6e70fc0d4a3f9a9f3022e5455e4894ff30f966f4bd720b4f91bda3427365ba99003e1b43bb39b0cd692472",
+    "block_hash": "b36797f4b7616a1f122b0aa204cfcbe345086ff60ad2b230d950bee28725c464eac396e65c875a5a6dc23caa6dd68590ae2300bf37e6fa9e8bac35f90c45f948",
+    "hash": "b36797f4b7616a1f122b0aa204cfcbe345086ff60ad2b230d950bee28725c464eac396e65c875a5a6dc23caa6dd68590ae2300bf37e6fa9e8bac35f90c45f948"
+  },
+  {
+    "index": 4,
+    "ts": 1792142323.254775,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "b36797f4b7616a1f122b0aa204cfcbe345086ff60ad2b230d950bee28725c464eac396e65c875a5a6dc23caa6dd68590ae2300bf37e6fa9e8bac35f90c45f948",
+    "block_hash": "35a9332d2311f5a56f338d2c958a1902aeff42069e7eb2f9f0cb08f7b128a9ba0fbd2f2baee971a074e2627e4af3187b89378894ac9c20878dfac945265f156e",
+    "hash": "35a9332d2311f5a56f338d2c958a1902aeff42069e7eb2f9f0cb08f7b128a9ba0fbd2f2baee971a074e2627e4af3187b89378894ac9c20878dfac945265f156e"
+  },
+  {
+    "index": 5,
+    "ts": 1792145870.1169384,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "35a9332d2311f5a56f338d2c958a1902aeff42069e7eb2f9f0cb08f7b128a9ba0fbd2f2baee971a074e2627e4af3187b89378894ac9c20878dfac945265f156e",
+    "block_hash": "05f0cc6acd8fda0038bc51c43e0bb86767b20da9dd48e9aaba8dae7b1a1c8c440e868343454e860a967a4f1ed347f4ec43d597550566633e70b43db65bd34e7f",
+    "hash": "05f0cc6acd8fda0038bc51c43e0bb86767b20da9dd48e9aaba8dae7b1a1c8c440e868343454e860a967a4f1ed347f4ec43d597550566633e70b43db65bd34e7f"
+  },
+  {
+    "index": 6,
+    "ts": 1792145902.3437855,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "05f0cc6acd8fda0038bc51c43e0bb86767b20da9dd48e9aaba8dae7b1a1c8c440e868343454e860a967a4f1ed347f4ec43d597550566633e70b43db65bd34e7f",
+    "block_hash": "3a97393bfd68eaf33c691c09ca9b84b327b557ba6239efad537d90388ca03e72792f5114bfe2cec929e9efc62ba674146338a99dd28e79e1d0ec16bbf479d866",
+    "hash": "3a97393bfd68eaf33c691c09ca9b84b327b557ba6239efad537d90388ca03e72792f5114bfe2cec929e9efc62ba674146338a99dd28e79e1d0ec16bbf479d866"
+  },
+  {
+    "index": 7,
+    "ts": 1792149483.5248392,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "3a97393bfd68eaf33c691c09ca9b84b327b557ba6239efad537d90388ca03e72792f5114bfe2cec929e9efc62ba674146338a99dd28e79e1d0ec16bbf479d866",
+    "block_hash": "ee7af91be88fe69a8b6c4ce6091fbb135c9c84a20bf6a40355432b6747cb1ad417097f6c4425d78791dc57fd9c74e1cbae008387403502f0c5600f4e38a416fc",
+    "hash": "ee7af91be88fe69a8b6c4ce6091fbb135c9c84a20bf6a40355432b6747cb1ad417097f6c4425d78791dc57fd9c74e1cbae008387403502f0c5600f4e38a416fc"
+  },
+  {
+    "index": 8,
+    "ts": 1792153180.0258687,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "ee7af91be88fe69a8b6c4ce6091fbb135c9c84a20bf6a40355432b6747cb1ad417097f6c4425d78791dc57fd9c74e1cbae008387403502f0c5600f4e38a416fc",
+    "block_hash": "661ab924c548eca5dcb8b7739caf47b972ab1e392e18c9ce8b58becb01a71f4759ace1607271da0fcd13f1014070480d5da4e9480f73b814ba3c40225d4ade9d",
+    "hash": "661ab924c548eca5dcb8b7739caf47b972ab1e392e18c9ce8b58becb01a71f4759ace1607271da0fcd13f1014070480d5da4e9480f73b814ba3c40225d4ade9d"
+  },
+  {
+    "index": 9,
+    "ts": 1792153205.229862,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "661ab924c548eca5dcb8b7739caf47b972ab1e392e18c9ce8b58becb01a71f4759ace1607271da0fcd13f1014070480d5da4e9480f73b814ba3c40225d4ade9d",
+    "block_hash": "94813ef317664c14d30cd4389b213e46ffd72a05badcb5ff18c5994cdc366980d3137706638d6f72a3b148b5092d3ae67467d491da8d9fbe407f79a00894745c",
+    "hash": "94813ef317664c14d30cd4389b213e46ffd72a05badcb5ff18c5994cdc366980d3137706638d6f72a3b148b5092d3ae67467d491da8d9fbe407f79a00894745c"
+  },
+  {
+    "index": 10,
+    "ts": 1792153226.580418,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "94813ef317664c14d30cd4389b213e46ffd72a05badcb5ff18c5994cdc366980d3137706638d6f72a3b148b5092d3ae67467d491da8d9fbe407f79a00894745c",
+    "block_hash": "680d71eece0b9b0605ea06c54d0c18eea564acf54f6eb39bb590b578054bb06af294bbcaeda8405ea95965a0ae88978b8b82fe00d4e6d72aa41a82f744d7a4d0",
+    "hash": "680d71eece0b9b0605ea06c54d0c18eea564acf54f6eb39bb590b578054bb06af294bbcaeda8405ea95965a0ae88978b8b82fe00d4e6d72aa41a82f744d7a4d0"
+  },
+  {
+    "index": 11,
+    "ts": 1792179764.7040112,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "680d71eece0b9b0605ea06c54d0c18eea564acf54f6eb39bb590b578054bb06af294bbcaeda8405ea95965a0ae88978b8b82fe00d4e6d72aa41a82f744d7a4d0",
+    "block_hash": "f02f9160657a60f7da1ea3a9f0c5714784a91317105c50efc24a60c61b380195ad7cb18fc55161da3b3153936a8acc2f8dac7f515aff628f1b08f1ec4293266c",
+    "hash": "f02f9160657a60f7da1ea3a9f0c5714784a91317105c50efc24a60c61b380195ad7cb18fc55161da3b3153936a8acc2f8dac7f515aff628f1b08f1ec4293266c"
+  },
+  {
+    "index": 12,
+    "ts": 1792179987.2538905,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "f02f9160657a60f7da1ea3a9f0c5714784a91317105c50efc24a60c61b380195ad7cb18fc55161da3b3153936a8acc2f8dac7f515aff628f1b08f1ec4293266c",
+    "block_hash": "48ec86f4fb8a7f7ebbfa05a712c8f593d118b4ef8649340e33c28ff43b8a44f4b4f476f8bdb0c770bf0bb9a6936acf87cc64e88c8756c1097aef5dd715412db6",
+    "hash": "48ec86f4fb8a7f7ebbfa05a712c8f593d118b4ef8649340e33c28ff43b8a44f4b4f476f8bdb0c770bf0bb9a6936acf87cc64e88c8756c1097aef5dd715412db6"
+  },
+  {
+    "index": 13,
+    "ts": 1792180189.4063258,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "48ec86f4fb8a7f7ebbfa05a712c8f593d118b4ef8649340e33c28ff43b8a44f4b4f476f8bdb0c770bf0bb9a6936acf87cc64e88c8756c1097aef5dd715412db6",
+    "block_hash": "1a2a901e7e7069262ed74d8ec087dd733f8b85bfc74b34c4cbb4bc957deaf8f6bb5cf13dbf26b6063b902a8484e38eecfc1736be5a18f1002a82dd46b7aae40a",
+    "hash": "1a2a901e7e7069262ed74d8ec087dd733f8b85bfc74b34c4cbb4bc957deaf8f6bb5cf13dbf26b6063b902a8484e38eecfc1736be5a18f1002a82dd46b7aae40a"
+  },
+  {
+    "index": 14,
+    "ts": 1792180240.2578096,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "1a2a901e7e7069262ed74d8ec087dd733f8b85bfc74b34c4cbb4bc957deaf8f6bb5cf13dbf26b6063b902a8484e38eecfc1736be5a18f1002a82dd46b7aae40a",
+    "block_hash": "95c076f6344e40913b94eec5b534a9000d0278b9617ac235f204fdb9d41f4b3bb1cbfaa28a560f07be8351d6e8865084be4d07799872e51d9f61af46ee0cad2b",
+    "hash": "95c076f6344e40913b94eec5b534a9000d0278b9617ac235f204fdb9d41f4b3bb1cbfaa28a560f07be8351d6e8865084be4d07799872e51d9f61af46ee0cad2b"
+  },
+  {
+    "index": 15,
+    "ts": 1792180363.3322237,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "95c076f6344e40913b94eec5b534a9000d0278b9617ac235f204fdb9d41f4b3bb1cbfaa28a560f07be8351d6e8865084be4d07799872e51d9f61af46ee0cad2b",
+    "block_hash": "2f04fa8c8e2085590f61ba16ddcac46478963d05b2432de1e3aa298d61d35fd7fd64efc0ba130a5f8f13ed0903100e82607d60154d9641ba8b73d28cd215f76d",
+    "hash": "2f04fa8c8e2085590f61ba16ddcac46478963d05b2432de1e3aa298d61d35fd7fd64efc0ba130a5f8f13ed0903100e82607d60154d9641ba8b73d28cd215f76d"
+  },
+  {
+    "index": 16,
+    "ts": 1792199857.0448208,
+    "owner": "jesse_martinez_jr",
+    "payload": {
+      "event": "DOMINION_BOOT",
+      "owner": "SLMK Jesse Martinez Junior",
+      "build": "DOMINION_SUPERINTELLIGENCE_STACK_v1.0"
+    },
+    "prev_hash": "2f04fa8c8e2085590f61ba16ddcac46478963d05b2432de1e3aa298d61d35fd7fd64efc0ba130a5f8f13ed0903100e82607d60154d9641ba8b73d28cd215f76d",
+    "block_hash": "c666c1e32362ab9e69cfe2d6f437dea9147395e983eea3fdd061b6762006fe6a75d1f3d31352890afbdcc9c06173d71cd49dc1d1c383d39e0ecf54daa163bde3",
+    "hash": "c666c1e32362ab9e69cfe2d6f437dea9147395e983eea3fdd061b6762006fe6a75d1f3d31352890afbdcc9c06173d71cd49dc1d1c383d39e0ecf54daa163bde3"
+  }
+]
