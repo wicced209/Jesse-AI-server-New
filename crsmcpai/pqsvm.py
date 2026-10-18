@@ -12,7 +12,9 @@ import os
 from core.logger import log_event
 
 # PQSVM session secret — in production load from HSM / secure vault
-_PQSVM_SECRET = os.getenv("PQSVM_SECRET", os.urandom(32).hex()).encode()
+# PQSVM session secret — production loads from env (Railway: PQSVM_SESSION_SECRET);
+# the literal below is a local-dev fallback only and must not be relied on in production.
+_PQSVM_SECRET = os.environ.get("PQSVM_SESSION_SECRET", "").encode() or os.getenv("PQSVM_SECRET", os.urandom(32).hex()).encode()
 
 
 def _derive_expected(payload: str) -> str:

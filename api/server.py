@@ -103,15 +103,17 @@ async def root():
 main{max-width:980px;margin:0 auto;padding:20px}.top{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:8px 0 14px}.brand{color:var(--green);font-weight:700}.status{color:var(--muted);font-size:12px}.status b{color:var(--green)}
 .terminal{margin-top:18px;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden;box-shadow:0 12px 50px #0008}.bar{padding:9px 13px;color:var(--muted);border-bottom:1px solid var(--line);font-size:12px}.out{min-height:360px;max-height:62vh;overflow:auto;padding:16px;white-space:pre-wrap;line-height:1.5}.prompt{color:var(--green)}.err{color:var(--red)}
 .form{display:flex;border-top:1px solid var(--line);padding:12px;gap:10px}.form span{color:var(--green);padding-top:11px}.form input{flex:1;background:#080b0f;color:var(--text);border:1px solid var(--line);border-radius:5px;padding:10px;font:inherit}.form button,.quick button{background:#18232d;color:var(--text);border:1px solid var(--line);border-radius:5px;padding:9px 12px;font:inherit;cursor:pointer}.form button:hover,.quick button:hover{border-color:var(--gold);color:var(--gold)}
-.quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.hint{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.5}@media(max-width:600px){main{padding:12px}.form{flex-wrap:wrap}.form input{min-width:70%}.form button{flex:1}.out{min-height:300px}}
+.quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.hint{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.5}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px}.form{flex-wrap:wrap}.form input{min-width:70%}.form button{flex:1}.out{min-height:300px}}
 </style></head><body><main><div class="top"><div class="brand">JESSE_AI :: CRSMCPAI_ALPHA</div><div class="status">● <b>ONLINE</b></div></div>
-<div class="terminal"><div class="bar">terminal session · Dominion stack connected · type <b>help</b> for commands</div><div id="out" class="out" role="log" aria-live="polite" aria-atomic="false" tabindex="0"></div><form id="form" class="form"><span>jesse@alpha:~$</span><label for="cmd" style="position:absolute;left:-9999px">Message Jesse AI</label><input id="cmd" autocomplete="off" autofocus aria-label="Message Jesse AI"><button type="button" id="mic">MIC</button><button type="submit">EXECUTE</button></form></div>
+<div class="terminal"><div class="bar">terminal session · Dominion stack connected · type <b>help</b> for commands</div><div id="out" class="out" role="log" aria-live="polite" aria-atomic="false" tabindex="0"></div><div id="sr-status" class="sr-only" role="status" aria-live="polite"></div><form id="form" class="form"><span>jesse@alpha:~$</span><label for="cmd" style="position:absolute;left:-9999px">Message Jesse AI</label><input id="cmd" autocomplete="off" autofocus aria-label="Message Jesse AI"><button type="button" id="mic">MIC</button><button type="submit">EXECUTE</button></form></div>
 <div class="quick"><button data-cmd="status">status</button><button data-cmd="handshake">handshake</button><button data-cmd="audit">audit</button><button data-cmd="ledger">ledger</button><button data-cmd="help">help</button></div>
 <div class="hint">Commands are sent to <code>POST /command</code>. Use the API docs at <a href="/docs" style="color:var(--gold)">/docs</a> for the full interface.</div></main>
 <script>
 const out=document.getElementById('out'),form=document.getElementById('form'),input=document.getElementById('cmd'),mic=document.getElementById('mic');
 function print(x,cls=''){const d=document.createElement('div');d.className=cls;d.textContent=x;out.appendChild(d);out.scrollTop=out.scrollHeight}
 function speak(x){if('speechSynthesis' in window){window.speechSynthesis.cancel();window.speechSynthesis.speak(new SpeechSynthesisUtterance(x))}}
+function printHidden(x){const d=document.createElement('div');d.setAttribute('aria-hidden','true');d.textContent=x;out.appendChild(d);out.scrollTop=out.scrollHeight}
+function announce(x){const s=document.getElementById('sr-status');if(s){s.textContent='';setTimeout(function(){s.textContent=x},40)}}
 function local(c){
   if(c==='help') return `Available commands:
   status       full Dominion status
@@ -136,17 +138,17 @@ async function run(c){
     const t=await r.text();
     if(!r.ok) throw new Error(t||('HTTP '+r.status));
     const data=JSON.parse(t);
-    print(JSON.stringify(data,null,2));
+    printHidden(JSON.stringify(data,null,2));
     const stack=data.stack_execution||{};
     const summary=(data.CRSMCPAI_ALPHA||'Result')+'; status '+(data.status||'unknown')+'. Ledger entry '+(stack.ledger_index??'not reported')+'.';
-    speak(summary);
+    speak(summary);announce(summary);
     out.focus();
-  }catch(e){print('ERROR: '+e.message,'err');speak('The command returned an error. Read the error shown on screen.')}
+  }catch(e){print('ERROR: '+e.message,'err');speak('The command returned an error. Read the error shown on screen.');announce('The command returned an error.')}
   finally{input.disabled=false;input.focus()}
 }
 form.addEventListener('submit',e=>{e.preventDefault();run(input.value);input.value=''});
 const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(SpeechRecognition){const rec=new SpeechRecognition();rec.lang='en-US';rec.interimResults=false;rec.onstart=()=>{mic.textContent='LISTENING';print('Listening...','prompt')};rec.onresult=e=>{input.value=e.results[0][0].transcript;run(input.value);input.value=''};rec.onerror=()=>{mic.textContent='MIC';print('Voice input was not available. You can type instead.','err')};rec.onend=()=>{mic.textContent='MIC'};mic.onclick=()=>rec.start()}else{mic.disabled=true;mic.title='Use iPhone dictation in the command field'}
-document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>run(b.dataset.cmd));print('Jesse AI terminal ready. CRSMCPAI Alpha and Dominion infrastructure online.');
+document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>run(b.dataset.cmd));print('Jesse AI terminal ready. CRSMCPAI Alpha and Dominion infrastructure online.');announce('Jesse AI terminal ready.');
 </script></body></html>"""
 @app.get("/health")
 async def health():
