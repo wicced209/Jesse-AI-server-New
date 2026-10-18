@@ -190,6 +190,25 @@ def _probe_groq(base_url, secrets):
         return ("DOWN", f"groq unreachable: {e}")
 
 
+def _probe_zai(base_url, secrets):
+    if not secrets.get("ZAI_API_KEY"):
+        try:
+            _tcp_connect("api.z.ai", 443, timeout=_TCP_QUICK_TIMEOUT)
+            return ("AUTH_REQUIRED", "no ZAI_API_KEY configured; endpoint reachable, auth required")
+        except Exception as e:
+            return ("DOWN", f"z.ai endpoint unreachable: {e}")
+    try:
+        status, _ = _http_get("https://api.z.ai/v1/models",
+                              {"Authorization": "Bearer " + secrets["ZAI_API_KEY"]})
+        return ("UP", f"z.ai glm list-models http {status}")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return ("AUTH_REQUIRED", f"z.ai http {e.code}: key invalid or restricted")
+        return ("DOWN", f"z.ai http {e.code}")
+    except Exception as e:
+        return ("DOWN", f"z.ai unreachable: {e}")
+
+
 def _probe_corridor(base_url, secrets):
     status, body = _http_get(base_url + "/corridor/status")
     return ("UP" if status == 200 else "DEGRADED", body.decode(errors="replace")[:120])
@@ -259,6 +278,9 @@ class RelaySupervisor:
             ("groq-relay", "llm-relay", "External Groq relay (api.groq.com)",
              _probe_groq,
              "Needs a valid GROQ_API_KEY env var; relay re-joins automatically once the key is set."),
+            ("zai-relay", "llm-relay", "External Z.ai GLM relay (api.z.ai)",
+             _probe_zai,
+             "Needs a valid ZAI_API_KEY env var; relay re-joins automatically once the key is set."),
             ("dominion-corridor", "corridor", "Dominion corridor — internal CRS instance transport (/corridor)",
              _probe_corridor, "In-process route; reconnect re-probes the endpoint."),
             ("janet-protocol", "janet", "Janet protocol — per-instance network layer (/janet)",

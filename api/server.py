@@ -1231,6 +1231,7 @@ def _relay_secrets():
     return {
         "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", ""),
         "GROQ_API_KEY": os.environ.get("GROQ_API_KEY", ""),
+        "ZAI_API_KEY": os.environ.get("ZAI_API_KEY", ""),
     }
 
 
