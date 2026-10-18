@@ -198,7 +198,7 @@ def _probe_zai(base_url, secrets):
         except Exception as e:
             return ("DOWN", f"z.ai endpoint unreachable: {e}")
     try:
-        status, _ = _http_get("https://api.z.ai/v1/models",
+        status, _ = _http_get("https://api.z.ai/api/paas/v4/models",
                               {"Authorization": "Bearer " + secrets["ZAI_API_KEY"]})
         return ("UP", f"z.ai glm list-models http {status}")
     except urllib.error.HTTPError as e:
