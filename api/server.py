@@ -562,6 +562,106 @@ async def demo_command(payload: DemoCommandRequest):
 
 
 # =====================================================================
+# DEMO OBSERVABILITY - Jesse's own product analytics (2026-10-19)
+# Privacy posture: aggregate/functional only. The demo site is Jesse's
+# own product; this records WHAT happened (page view, question asked,
+# voice tap), never WHO. No IP storage, no fingerprinting, no cookies,
+# no third-party trackers. Only a client-generated random session id.
+# Each event seals into the golden ledger (Postgres + file backup), so
+# records are immutable. This is the owner's observability over his own
+# system, matching the day-one protective mission (help and protect,
+# never surveil). Read recent traffic via GET /demo/events.
+# =====================================================================
+
+_DEMO_EVENT_TYPES = frozenset([
+    "page_view", "session_start", "session_end", "voice_tap",
+    "handsfree_toggle", "prompt_chip", "question_asked", "tts_reply",
+])
+
+# Light global rate limiter (in-memory sliding window) so a flood of
+# analytics pings can't strain the container. 600 events per 60 seconds
+# server-wide. The demo client is fail-silent regardless.
+_DEMO_EVENT_WINDOW = 60.0
+_DEMO_EVENT_MAX = 600
+_demo_event_times = []
+
+
+class DemoEventRequest(BaseModel):
+    event_type: str = "page_view"
+    session_id: str = "unknown"
+    ts_client: float = 0.0
+    detail: str = ""
+
+
+def _clean_session_id(raw):
+    s = str(raw or "")[:64]
+    return "".join(c for c in s if c.isalnum() or c in "-_") or "unknown"
+
+
+def _clean_detail(raw):
+    s = str(raw or "")[:500]
+    return "".join(c for c in s if c.isprintable()).strip()
+
+
+def _demo_event_allowed():
+    now = time.time()
+    while _demo_event_times and now - _demo_event_times[0] > _DEMO_EVENT_WINDOW:
+        _demo_event_times.pop(0)
+    if len(_demo_event_times) >= _DEMO_EVENT_MAX:
+        return False
+    _demo_event_times.append(now)
+    return True
+
+
+@app.post("/demo/event")
+async def demo_event(payload: DemoEventRequest):
+    """Record one anonymous demo analytics event, sealed to the golden ledger."""
+    if payload.event_type not in _DEMO_EVENT_TYPES:
+        return JSONResponse(status_code=400, content={"error": "Unknown event type."})
+    if not _demo_event_allowed():
+        return JSONResponse(status_code=429, content={"error": "Rate limited."})
+    event = {
+        "kind": "demo_event",
+        "event_type": payload.event_type,
+        "session_id": _clean_session_id(payload.session_id),
+        "ts_client": float(payload.ts_client or 0.0),
+        "ts_server": time.time(),
+        "detail": _clean_detail(payload.detail),
+    }
+    block = None
+    try:
+        from memory.ledger import create_event
+        block = create_event({"source": "demo_observability", **event})
+    except Exception as e:
+        log_event(f"[DEMO-EVENT] ledger seal failed: {e}", "warning")
+    log_event(f"[DEMO-EVENT] {event['event_type']} session={event['session_id'][:12]}")
+    return {"sealed": bool(block), "block_index": block["index"] if block else None}
+
+
+@app.get("/demo/events")
+async def demo_events(limit: int = 100):
+    """Read recent sealed demo analytics events (owner observability)."""
+    try:
+        from memory.ledger import get_ledger
+        chain = get_ledger()
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Ledger unavailable: {e}"})
+    limit = max(1, min(int(limit), 200))
+    hits = []
+    for b in chain[-500:]:
+        p = b.get("payload") or {}
+        if isinstance(p, dict) and p.get("kind") == "demo_event":
+            hits.append({
+                "block_index": b.get("index"),
+                "sealed_at": b.get("ts"),
+                "event": {k: p.get(k) for k in
+                          ("event_type", "session_id", "ts_client", "ts_server", "detail")},
+            })
+    return {"total_blocks": len(chain), "events_returned": len(hits[-limit:]),
+            "events": hits[-limit:]}
+
+
+# =====================================================================
 # SOVEREIGN ENGINE WIRING - 9 engine modules + file ops, endpoints direct
 # (no separate routers; stdlib-only module calls; all handlers crash-safe)
 # =====================================================================
