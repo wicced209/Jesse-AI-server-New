@@ -32,8 +32,12 @@ OWNER = "SLMK Jesse Martinez Junior"
 # Allowlisted sender — the ONLY address whose mail is executed.
 ALLOWED_SENDERS = {"wicced209@icloud.com"}
 
-# Subject prefixes that mark a command email.
-COMMAND_SUBJECT_PREFIXES = ("JESSE AI:", "JESSE AI COMMAND:", "[JESSE AI]")
+# Subject prefixes that mark a command email. Longer, specific prefixes come
+# first so "JESSE AI COMMAND:" is stripped fully rather than leaving a
+# "COMMAND:" remnant. The trailing colon is OPTIONAL on every prefix:
+# VoiceOver does not read the colon back, so a blind user cannot reliably
+# know it is required. A bare "Jesse AI" subject counts as a command.
+COMMAND_SUBJECT_PREFIXES = ("JESSE AI COMMAND:", "[JESSE AI]", "JESSE AI:")
 
 # Reply destination (Jesse's iPhone Mail address).
 REPLY_TO = "WICCED209@iCloud.com"
@@ -42,12 +46,28 @@ REPLY_TO = "WICCED209@iCloud.com"
 _processed_ids: set = set()
 
 
+def _subject_prefix_len(subject: str) -> int:
+    """Length of a recognized command prefix in the subject, 0 if none.
+
+    Accepts the coloned prefixes, plus the bare words "Jesse AI" (no colon)
+    since VoiceOver does not read the colon back for a blind user.
+    """
+    s = (subject or "").strip().upper()
+    for p in COMMAND_SUBJECT_PREFIXES:
+        if s.startswith(p):
+            return len(p)
+    if s == "JESSE AI":
+        return len("JESSE AI")
+    if s.startswith("JESSE AI "):
+        return len("JESSE AI ")
+    return 0
+
+
 def is_command_email(sender: str, subject: str, body: str) -> bool:
     """True only if the sender is allowlisted AND the message looks like a command."""
     if (sender or "").strip().lower() not in ALLOWED_SENDERS:
         return False
-    subj = (subject or "").strip().upper()
-    if any(subj.startswith(p) for p in COMMAND_SUBJECT_PREFIXES):
+    if _subject_prefix_len(subject) > 0:
         return True
     return (body or "").strip().lower().startswith("jesse ai,")
 
@@ -55,10 +75,9 @@ def is_command_email(sender: str, subject: str, body: str) -> bool:
 def extract_command(subject: str, body: str) -> str:
     """Strip the command prefix; return the raw command text."""
     subj = (subject or "").strip()
-    for p in COMMAND_SUBJECT_PREFIXES:
-        if subj.upper().startswith(p):
-            subj = subj[len(p):].strip()
-            break
+    n = _subject_prefix_len(subj)
+    if n:
+        subj = subj[n:].strip()
     body = (body or "").strip()
     if body.lower().startswith("jesse ai,"):
         body = body[len("jesse ai,"):].strip()
