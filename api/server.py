@@ -134,13 +134,14 @@ async function run(c){
   const l=local(c.toLowerCase());
   if(l!==null){if(l)print(l);input.disabled=false;input.focus();return}
   try{
-    const r=await fetch('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c,user:'jesse_martinez_jr',use_llm:false})});
+    const r=await fetch('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:c,user:'jesse_martinez_jr',use_llm:true})});
     const t=await r.text();
     if(!r.ok) throw new Error(t||('HTTP '+r.status));
     const data=JSON.parse(t);
     printHidden(JSON.stringify(data,null,2));
     const stack=data.stack_execution||{};
-    const summary=(data.CRSMCPAI_ALPHA||'Result')+'; status '+(data.status||'unknown')+'. Ledger entry '+(stack.ledger_index??'not reported')+'.';
+    if(data.spoken_response){print(data.spoken_response)}
+    const summary=data.spoken_response||((data.CRSMCPAI_ALPHA||'Result')+'; status '+(data.status||'unknown')+'. Ledger entry '+(stack.ledger_index??'not reported')+'.');
     speak(summary);announce(summary);
     out.focus();
   }catch(e){print('ERROR: '+e.message,'err');speak('The command returned an error. Read the error shown on screen.');announce('The command returned an error.')}
@@ -178,6 +179,63 @@ async def status():
 @app.get("/audit")
 async def audit():
     return dominion.quantum_audit()
+
+
+def _spoken_response_for(command_text, stack_result, llm_response):
+    """Clean, speakable rendering of a /command result for the owner's
+    private terminal: the full substance in plain words. Hashes and raw
+    code are never read aloud (owner's standing rule); they remain on
+    screen and sealed in the ledger. Never raises."""
+    try:
+        import re as _re
+
+        def _clean(x, cap):
+            t = str(x or "")
+            t = _re.sub(r"\b[0-9a-fA-F]{12,}\b", "hash on file", t)
+            t = _re.sub(
+                r"verification sovereign living master key Jesse Martinez Junior",
+                "your verification phrase", t, flags=_re.I)
+            t = t.replace("`", "").replace("#", "").replace("*", "")
+            t = _re.sub(r"\s+", " ", t).strip()
+            return t[:cap]
+
+        parts = ["Command executed: " + _clean(command_text, 200) + "."]
+        sr = stack_result if isinstance(stack_result, dict) else {}
+        idx = sr.get("ledger_index")
+        if idx is not None:
+            parts.append("Sealed as ledger entry %s." % idx)
+        agents = sr.get("agents") or {}
+        if isinstance(agents, dict):
+            for _name in ("planner", "builder", "guardian", "memory"):
+                _a = agents.get(_name)
+                if not isinstance(_a, dict):
+                    continue
+                _out = _a.get("output") if isinstance(_a.get("output"), dict) else {}
+                _status = _a.get("status") or _out.get("status")
+                if _name == "planner" and _out.get("plan"):
+                    parts.append("Planner plan. " + _clean(_out.get("plan"), 1500))
+                elif _name == "builder":
+                    _seg = "Builder %s." % (_out.get("status") or _status or "finished")
+                    if _out.get("code"):
+                        _seg += (" It produced code, %d lines. The code is on "
+                                 "screen and sealed in the ledger, not read aloud."
+                                 % len(str(_out.get("code")).splitlines()))
+                    parts.append(_seg)
+                else:
+                    _txt = None
+                    for _k in ("summary", "message", "result", "note", "response"):
+                        if _out.get(_k):
+                            _txt = _out.get(_k)
+                            break
+                    if _txt:
+                        parts.append("%s. %s" % (_name.capitalize(), _clean(_txt, 800)))
+                    elif _status:
+                        parts.append("%s status %s." % (_name.capitalize(), _status))
+        if llm_response:
+            parts.append("Jesse AI response. " + _clean(llm_response, 3000))
+        return " ".join(p for p in parts if p)
+    except Exception:
+        return ""
 
 
 @app.post("/command")
@@ -231,6 +289,7 @@ async def command(req: CommandRequest):
         "owner": SOVEREIGN_OWNER,
         "stack_execution": stack_result,
         "jesse_ai_response": llm_response,
+        "spoken_response": _spoken_response_for(req.command, stack_result, llm_response),
         "status": "SUCCESS",
     }
 
