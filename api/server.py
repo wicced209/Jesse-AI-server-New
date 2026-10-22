@@ -182,10 +182,14 @@ async def audit():
 
 
 def _spoken_response_for(command_text, stack_result, llm_response):
-    """Clean, speakable rendering of a /command result for the owner's
-    private terminal: the full substance in plain words. Hashes and raw
-    code are never read aloud (owner's standing rule); they remain on
-    screen and sealed in the ledger. Never raises."""
+    """Short-lead, full-response spoken rendering for the owner's private
+    terminal. Owner's direction (2026-10-21): the old format spent minutes
+    narrating the command echo, the planner plan, and every agent and OS
+    digest before reaching the answer, and it truncated the answer itself.
+    Now: one short confirmation line, then Jesse AI's response in full.
+    Hashes are never read aloud (owner's standing rule); agent detail
+    remains in the full JSON on screen and sealed in the ledger. Never
+    raises."""
     try:
         import re as _re
 
@@ -199,40 +203,14 @@ def _spoken_response_for(command_text, stack_result, llm_response):
             t = _re.sub(r"\s+", " ", t).strip()
             return t[:cap]
 
-        parts = ["Command executed: " + _clean(command_text, 200) + "."]
         sr = stack_result if isinstance(stack_result, dict) else {}
         idx = sr.get("ledger_index")
+        lead = "Command executed."
         if idx is not None:
-            parts.append("Sealed as ledger entry %s." % idx)
-        agents = sr.get("agents") or {}
-        if isinstance(agents, dict):
-            for _name in ("planner", "builder", "guardian", "memory"):
-                _a = agents.get(_name)
-                if not isinstance(_a, dict):
-                    continue
-                _out = _a.get("output") if isinstance(_a.get("output"), dict) else {}
-                _status = _a.get("status") or _out.get("status")
-                if _name == "planner" and _out.get("plan"):
-                    parts.append("Planner plan. " + _clean(_out.get("plan"), 1500))
-                elif _name == "builder":
-                    _seg = "Builder %s." % (_out.get("status") or _status or "finished")
-                    if _out.get("code"):
-                        _seg += (" It produced code, %d lines. The code is on "
-                                 "screen and sealed in the ledger, not read aloud."
-                                 % len(str(_out.get("code")).splitlines()))
-                    parts.append(_seg)
-                else:
-                    _txt = None
-                    for _k in ("summary", "message", "result", "note", "response"):
-                        if _out.get(_k):
-                            _txt = _out.get(_k)
-                            break
-                    if _txt:
-                        parts.append("%s. %s" % (_name.capitalize(), _clean(_txt, 800)))
-                    elif _status:
-                        parts.append("%s status %s." % (_name.capitalize(), _status))
+            lead = "Command executed. Sealed as ledger entry %s." % idx
+        parts = [lead]
         if llm_response:
-            parts.append("Jesse AI response. " + _clean(llm_response, 3000))
+            parts.append("Jesse AI response. " + _clean(llm_response, 12000))
         return " ".join(p for p in parts if p)
     except Exception:
         return ""
