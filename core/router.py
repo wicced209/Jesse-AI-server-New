@@ -4,6 +4,8 @@ from agents.planner_agent import planner_agent
 from agents.guardian_agent import guardian_agent
 from agents.memory_agent import memory_agent
 from agents.builder_agent import builder_agent
+from agents.tool_agent import tool_agent
+from agents.scheduler_agent import scheduler_agent
 from dominion.stack import dominion
 
 
@@ -18,6 +20,10 @@ def route_command(command: str, user: str = "jesse_martinez_jr") -> dict:
         return planner_agent(command)
     elif any(x in cmd for x in ["remember", "store", "memory", "recall"]):
         return memory_agent(command)
+    elif any(x in cmd for x in ["schedule", "scheduler", "timer", "recurring"]):
+        return scheduler_agent(command)
+    elif any(x in cmd for x in ["tool", "arc", "operate"]):
+        return tool_agent(command, user=user)
     elif any(x in cmd for x in ["build", "create", "generate", "builder"]):
         return builder_agent(command)
     else:
