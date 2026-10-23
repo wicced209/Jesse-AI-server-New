@@ -49,5 +49,6 @@ class ModuleContextProtocol:
 mcp = ModuleContextProtocol()
 
 # Auto-register core agents
-for _agent in ["planner", "builder", "guardian", "memory"]:
+for _agent in ["planner", "builder", "guardian", "memory", "tool",
+               "scheduler"]:
     mcp.register_module(_agent, ["context", "command", "result"])
