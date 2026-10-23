@@ -43,8 +43,15 @@ def _seal(*parts):
     return h.hexdigest()
 
 
+_DEFAULT_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+
+
 def _http_get(url, headers=None, timeout=_HTTP_TIMEOUT):
-    req = urllib.request.Request(url, headers=headers or {})
+    merged = {"User-Agent": _DEFAULT_UA}
+    if headers:
+        merged.update(headers)
+    req = urllib.request.Request(url, headers=merged)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.status, r.read(4096)
 
@@ -190,6 +197,25 @@ def _probe_groq(base_url, secrets):
         return ("DOWN", f"groq unreachable: {e}")
 
 
+def _probe_openrouter(base_url, secrets):
+    if not secrets.get("OPENROUTER_API_KEY"):
+        try:
+            _tcp_connect("openrouter.ai", 443, timeout=_TCP_QUICK_TIMEOUT)
+            return ("AUTH_REQUIRED", "no OPENROUTER_API_KEY configured; endpoint reachable, auth required")
+        except Exception as e:
+            return ("DOWN", f"openrouter endpoint unreachable: {e}")
+    try:
+        status, _ = _http_get("https://openrouter.ai/api/v1/auth/key",
+                              {"Authorization": "Bearer " + secrets["OPENROUTER_API_KEY"]})
+        return ("UP", f"openrouter auth-key http {status}")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return ("AUTH_REQUIRED", f"openrouter http {e.code}: key invalid or restricted")
+        return ("DOWN", f"openrouter http {e.code}")
+    except Exception as e:
+        return ("DOWN", f"openrouter unreachable: {e}")
+
+
 def _probe_zai(base_url, secrets):
     if not secrets.get("ZAI_API_KEY"):
         try:
@@ -278,6 +304,9 @@ class RelaySupervisor:
             ("groq-relay", "llm-relay", "External Groq relay (api.groq.com)",
              _probe_groq,
              "Needs a valid GROQ_API_KEY env var; relay re-joins automatically once the key is set."),
+            ("openrouter-relay", "llm-relay", "External OpenRouter relay (openrouter.ai)",
+             _probe_openrouter,
+             "Needs a valid OPENROUTER_API_KEY env var; relay re-joins automatically once the key is set."),
             ("zai-relay", "llm-relay", "External Z.ai GLM relay (api.z.ai)",
              _probe_zai,
              "Needs a valid ZAI_API_KEY env var; relay re-joins automatically once the key is set."),
@@ -361,6 +390,36 @@ class RelaySupervisor:
 
     def history_log(self, limit=50):
         return {"events": self.history[-limit:][::-1], "count": len(self.history)}
+
+    # --------------------------------- model-watcher pipeline hooks (#73)
+    # Additive only: promoted watchlist candidates register as STANDBY
+    # channels, and rollback trips them. Existing channels untouched.
+    def register_channel(self, channel_id, kind, description, probe_fn,
+                         reconnect_note="", standby=False):
+        if channel_id in self.channels:
+            return {"ok": False, "reason": "channel already registered",
+                    "channel_id": channel_id}
+        ch = RelayChannel(channel_id, kind, description, probe_fn,
+                          reconnect_note=reconnect_note,
+                          is_local_fix_possible=False)
+        ch.standby = bool(standby)
+        self.channels[channel_id] = ch
+        self._log("register_channel", channel_id=channel_id,
+                  result={"standby": bool(standby)})
+        return {"ok": True, "channel_id": channel_id, "standby": bool(standby)}
+
+    def trip_channel(self, channel_id, reason="rollback"):
+        ch = self.channels.get(channel_id)
+        if ch is None:
+            return {"ok": False, "error": "unknown channel",
+                    "channel_id": channel_id}
+        ch.isolated = True
+        ch.state = "ISOLATED"
+        ch.failures = 0
+        ch.last_detail = f"tripped: {reason}"[:300]
+        self._log("trip_channel", channel_id=channel_id,
+                  result={"reason": reason})
+        return {"ok": True, "channel_id": channel_id, "state": "ISOLATED"}
 
     # ------------------------------------------------------------------ log
     def _log(self, event, channel_id=None, user=None, result=None, results=None, summary=None):
