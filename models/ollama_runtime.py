@@ -17,6 +17,9 @@ GEMINI_URL     = "https://generativelanguage.googleapis.com/v1beta/interactions"
 GROQ_API_KEY  = os.environ.get("GROQ_API_KEY", "")
 GROQ_URL      = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL    = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_URL     = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL   = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
 
 
 JESSE_SYSTEM = """You are Jesse AI — the internal sovereign language model of CRSMCPAI Alpha.
@@ -43,7 +46,7 @@ JESSE_SYSTEM_FULL = (_V2_BOOT + "\n\n" + JESSE_SYSTEM) if _V2_BOOT else JESSE_SY
 def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: str = "") -> str:
     """
     Generate a response using Jesse AI's internal LLM.
-    Tries Ollama first (local), then Groq (free cloud), then stub. history: optional conversation history prepended to the prompt.
+    Tries Ollama first (local), then Gemini, then Groq (free cloud), then OpenRouter, then stub. history: optional conversation history prepended to the prompt.
     """
     
     full_prompt = (history + "\n\n" + prompt) if history else prompt
@@ -121,6 +124,34 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: 
         except Exception as e:
             log_event(f"[LLM] Groq error: {e}", "warning")
 
+    # Try OpenRouter (cloud aggregator; default model is the Gemma 4 free route)
+    if OPENROUTER_API_KEY:
+        try:
+            log_event(f"[LLM] Trying OpenRouter model='{OPENROUTER_MODEL}'")
+            payload = json.dumps({
+                "model": OPENROUTER_MODEL,
+                "messages": [
+                    {"role": "system", "content": JESSE_SYSTEM_FULL},
+                    {"role": "user", "content": full_prompt}
+                ],
+                "max_tokens": 1024,
+            }).encode()
+            req = urllib.request.Request(OPENROUTER_URL, data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                    "HTTP-Referer": "https://web-production-5d719b.up.railway.app",
+                    "X-Title": "Jesse AI CRSMCPAI Alpha",
+                })
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = json.loads(r.read())
+                result = data["choices"][0]["message"]["content"]
+                log_event(f"[LLM] OpenRouter response ({len(result)} chars)")
+                return result
+        except Exception as e:
+            log_event(f"[LLM] OpenRouter error: {e}", "warning")
+
     # Stub fallback
     log_event("[LLM] All LLMs unavailable — returning stub", "warning")
-    return f"[Jesse AI] Command received: {prompt[:100]}... | LLM offline — connect Ollama or set GROQ_API_KEY"
+    return f"[Jesse AI] Command received: {prompt[:100]}... | LLM offline — connect Ollama or set GROQ_API_KEY or OPENROUTER_API_KEY"
