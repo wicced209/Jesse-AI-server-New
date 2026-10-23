@@ -19,7 +19,7 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  video_quantum, video_sentient, game_engine, os_kernel,
                  ledger_immutable, unified_ledger_router, os_orchestrator,
                  thought_trust, sovereign_model, relay_supervisor, arc_tools,
-                 email_messenger)
+                 email_messenger, model_watcher)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -43,6 +43,7 @@ from api.pq_audio import pq_audio_router
 from api.pq_video import pq_video_router
 from api.agssi_core import agssi_router
 from api.dominion_tnc import tnc_router
+from api.agent_ledger import router as agent_ledger_router
 
 app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
@@ -77,6 +78,7 @@ app.include_router(pq_audio_router)
 app.include_router(pq_video_router)
 app.include_router(agssi_router)
 app.include_router(tnc_router)
+app.include_router(agent_ledger_router)
 
 
 class CommandRequest(BaseModel):
@@ -1370,6 +1372,7 @@ def _relay_secrets():
     return {
         "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", ""),
         "GROQ_API_KEY": os.environ.get("GROQ_API_KEY", ""),
+        "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY", ""),
         "ZAI_API_KEY": os.environ.get("ZAI_API_KEY", ""),
     }
 
@@ -1531,3 +1534,113 @@ async def messenger_receive(req: MessengerReceiveRequest):
         "reply_subject": email_messenger.build_reply_subject(req.subject),
         "reply_body": reply_body,
     }
+
+
+# ── Open-Weight Model Watcher & Gated Auto-Integration Pipeline (#73) ─────
+# Design: docs/OPEN_WEIGHT_WATCHER_PIPELINE.md. Phase 1: watch → stage →
+# license screen → evaluate → 8-gate 4C/4V → promote/rollback → ledger-sealed.
+# Free routes only, $0 until income. Mutating calls require superadmin auth.
+# candidate_id values contain "/" (e.g. org/model) — hence the :path converter.
+
+class ModelActionRequest(BaseModel):
+    user: str = ""
+    model_id: str = ""
+    source: str = "manual"
+    revision: str = ""
+    license_id: str = ""
+    route: str = "relay"
+    dataset_path: str = ""
+    dataset_n: int = 10
+    reason: str = "manual rollback"
+
+
+def _model_auth(req: ModelActionRequest):
+    if not authenticate(req.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"ok": False, "error": "superadmin auth required"})
+    return None
+
+
+@app.get("/models/watcher/status")
+async def models_watcher_status():
+    return model_watcher.watcher_status()
+
+
+@app.get("/models/candidates")
+async def models_candidates(state: str = ""):
+    return model_watcher.list_candidates(state or None)
+
+
+@app.get("/models/sealed-events")
+async def models_sealed_events(limit: int = 50):
+    return model_watcher.sealed_events(limit)
+
+
+@app.post("/models/watcher/poll")
+async def models_watcher_poll(req: ModelActionRequest):
+    denied = _model_auth(req)
+    if denied is not None:
+        return denied
+    return model_watcher.poll_sources()
+
+
+@app.post("/models/candidates")
+async def models_intake(req: ModelActionRequest):
+    denied = _model_auth(req)
+    if denied is not None:
+        return denied
+    return model_watcher.manual_intake(
+        req.model_id, source=req.source or "manual",
+        revision=req.revision or None,
+        license_id=req.license_id or None)
+
+
+@app.post("/models/candidates/{candidate_id:path}/stage")
+async def models_stage(candidate_id: str, req: ModelActionRequest):
+    denied = _model_auth(req)
+    if denied is not None:
+        return denied
+    return model_watcher.stage_candidate(candidate_id, route=req.route or "relay")
+
+
+@app.post("/models/candidates/{candidate_id:path}/license")
+async def models_license(candidate_id: str, req: ModelActionRequest):
+    denied = _model_auth(req)
+    if denied is not None:
+        return denied
+    return model_watcher.license_screen(candidate_id)
+
+
+@app.post("/models/candidates/{candidate_id:path}/evaluate")
+async def models_evaluate(candidate_id: str, req: ModelActionRequest):
+    denied = _model_auth(req)
+    if denied is not None:
+        return denied
+    return model_watcher.evaluate_candidate(
+        candidate_id, dataset_path=req.dataset_path or None,
+        dataset_n=req.dataset_n or 10)
+
+
+@app.post("/models/candidates/{candidate_id:path}/gates")
+async def models_gates(candidate_id: str, req: ModelActionRequest):
+    denied = _model_auth(req)
+    if denied is not None:
+        return denied
+    return model_watcher.run_gates(candidate_id)
+
+
+@app.post("/models/candidates/{candidate_id:path}/promote")
+async def models_promote(candidate_id: str, req: ModelActionRequest):
+    denied = _model_auth(req)
+    if denied is not None:
+        return denied
+    return model_watcher.promote_candidate(candidate_id, _relay_supervisor)
+
+
+@app.post("/models/rollback/{channel}")
+async def models_rollback(channel: str, req: ModelActionRequest):
+    denied = _model_auth(req)
+    if denied is not None:
+        return denied
+    return model_watcher.rollback_channel(channel, _relay_supervisor,
+                                          req.reason or "manual rollback")
