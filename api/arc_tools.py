@@ -445,7 +445,11 @@ class Red103DHIS(ArcTool):
             return {"ok": False, "error": "unknown relay",
                     "known": sorted(self.RELAYS)}
         key = (params.get("api_key") or "").strip()
-        headers = {"Authorization": f"Bearer {key}"} if key and relay == "groq" else {}
+        headers = {"User-Agent": ("Mozilla/5.0 (X11; Linux x86_64) "
+                                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                  "Chrome/126.0.0.0 Safari/537.36")}
+        if key and relay == "groq":
+            headers["Authorization"] = f"Bearer {key}"
         target = url + (f"?key={key}" if key and relay == "gemini" else "")
         t0 = time.monotonic()
         leak_flags = []
