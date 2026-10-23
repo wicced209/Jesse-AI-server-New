@@ -36,6 +36,8 @@ from agents.planner_agent  import planner_agent
 from agents.builder_agent  import builder_agent
 from agents.guardian_agent import guardian_agent
 from agents.memory_agent   import memory_agent
+from agents.tool_agent     import tool_agent
+from agents.scheduler_agent import scheduler_agent
 
 # ── v3: dormant network / infrastructure declarations wired in ───────────────
 from sin_network             import sin_network            as sin_net
@@ -82,6 +84,8 @@ class DominionStack:
             ("dominion_builder",      ["build", "execute", "produce"]),
             ("dominion_guardian",     ["authenticate", "sign", "verify"]),
             ("dominion_memory",       ["store", "recall", "retrieve"]),
+            ("dominion_tool",         ["arc", "execute", "operate"]),
+            ("dominion_scheduler",    ["schedule", "dispatch", "recurring"]),
             ("dominion_sin_network",  ["route", "mesh", "fuse"]),
             ("dominion_solva_network",["voice", "accessibility", "interface"]),
             ("dominion_infrastructure",["kernel", "orchestrate", "mesh"]),
@@ -254,6 +258,10 @@ class DominionStack:
         stage_guardian = self._run_stage("guardian", guardian_agent,
                                          command, user)
         stage_memory = self._run_stage("memory", memory_agent, command)
+        stage_tool = self._run_stage("tool", tool_agent, command,
+                                     user=user)
+        stage_scheduler = self._run_stage("scheduler", scheduler_agent,
+                                          command)
         net_ctx = {"command": command, "user": user}
         stage_sin = self._run_stage("sin_network", sin_net.integrate, net_ctx)
         stage_solva = self._run_stage("solva_network", solva_net.integrate,
@@ -291,6 +299,8 @@ class DominionStack:
                 "builder":  stage_builder,
                 "guardian": stage_guardian,
                 "memory":   stage_memory,
+                "tool":     stage_tool,
+                "scheduler": stage_scheduler,
             },
             "networks": {
                 "sin_network":            stage_sin,
