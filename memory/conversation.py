@@ -103,6 +103,49 @@ def get_history(user: str, limit: int = 20) -> list:
     return list(_mem_store.get(user, [])[-limit:])
 
 
+def get_history_page(user: str, limit: int = 50, offset: int = 0,
+                     since_block=None, until_block=None):
+    """Paginated conversation read, oldest first, full untruncated content.
+    Returns (total, messages). Backs GET /oversight/conversations so any
+    past response text (including the Oct 21 evening window) is readable
+    in full, not just the last 5 via GET /memory."""
+    clauses = ["username = %s"]
+    params = [user]
+    if since_block is not None:
+        clauses.append("block_index >= %s")
+        params.append(since_block)
+    if until_block is not None:
+        clauses.append("block_index <= %s")
+        params.append(until_block)
+    where = " WHERE " + " AND ".join(clauses)
+    conn = _pg()
+    if conn is not None:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM conversations" + where, params)
+                total = cur.fetchone()[0]
+                cur.execute(
+                    "SELECT username, role, content, ts, block_hash, block_index "
+                    "FROM conversations" + where + " ORDER BY id ASC LIMIT %s OFFSET %s",
+                    params + [limit, offset],
+                )
+                rows = cur.fetchall()
+            msgs = [
+                {"user": r[0], "role": r[1], "content": r[2], "ts": r[3],
+                 "block_hash": r[4], "block_index": r[5]}
+                for r in rows
+            ]
+            return total, msgs
+        except Exception:
+            pass
+    rows = list(_mem_store.get(user, []))
+    if since_block is not None:
+        rows = [m for m in rows if m.get("block_index") is not None and m["block_index"] >= since_block]
+    if until_block is not None:
+        rows = [m for m in rows if m.get("block_index") is not None and m["block_index"] <= until_block]
+    return len(rows), rows[offset:offset + limit]
+
+
 def format_history_for_prompt(user: str, limit: int = 10) -> str:
     """Format recent conversation as LLM prompt context."""
     history = get_history(user, limit)
