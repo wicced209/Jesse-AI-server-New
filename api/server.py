@@ -10,7 +10,7 @@ import time
 import asyncio
 import base64
 from pathlib import Path
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Header
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -260,6 +260,21 @@ async def command(req: CommandRequest):
         except Exception as e:
             log_event(f"[MEMORY] failed to store reply: {e}", "warning")
 
+    spoken_response = _spoken_response_for(req.command, stack_result, llm_response)
+    # Oversight: persist the full execution so Muse can read it back complete
+    # and unabridged. Recording never fails the command.
+    try:
+        from memory.executions import record_execution
+        record_execution(
+            req.user, "command", req.command,
+            ledger_index=stack_result.get("ledger_index") if isinstance(stack_result, dict) else None,
+            stack_execution=stack_result,
+            jesse_ai_response=llm_response,
+            spoken_response=spoken_response,
+        )
+    except Exception as e:
+        log_event(f"[EXECUTIONS] record failed: {e}", "warning")
+
     return {
         "CRSMCPAI_ALPHA": "COMMAND_EXECUTED",
         "execution_engine": "CRSMCPAI_ALPHA_V2",
@@ -269,11 +284,9 @@ async def command(req: CommandRequest):
         "owner": SOVEREIGN_OWNER,
         "stack_execution": stack_result,
         "jesse_ai_response": llm_response,
-        "spoken_response": _spoken_response_for(req.command, stack_result, llm_response),
+        "spoken_response": spoken_response,
         "status": "SUCCESS",
     }
-
-
 @app.post("/query")
 async def query(req: QueryRequest):
     """Compatibility route for CRSMCPAI Alpha reasoning queries."""
@@ -359,6 +372,18 @@ async def autonomous_build(req: BuildRequest):
     else:
         build_status, gate_release = "PARTIAL", "HELD_BY_GATE"
 
+    # Oversight: persist the full build execution. Recording never fails the build.
+    try:
+        from memory.executions import record_execution
+        record_execution(
+            req.user, "build", req.command,
+            ledger_index=build_result.get("ledger_index") if isinstance(build_result, dict) else None,
+            build_result=build_result,
+            jesse_ai_response=llm_response,
+        )
+    except Exception as e:
+        log_event(f"[EXECUTIONS] record failed: {e}", "warning")
+
     return {
         "CRSMCPAI_ALPHA": "AUTONOMOUS_BUILD_EXECUTED",
         "execution_engine": "CRSMCPAI_ALPHA_V2",
@@ -421,6 +446,69 @@ async def websocket_relay(websocket: WebSocket):
     except Exception as exc:
         await websocket.send_json({"status": "ERROR", "error": str(exc)})
         await websocket.close(code=1011)
+
+
+def _require_oversight(x_user: str):
+    """Oversight routes require an explicit allowlisted header. No passing
+    default: unlike admin_routes, an absent header must NOT authenticate."""
+    return bool(x_user) and authenticate(x_user)
+
+
+@app.get("/oversight/conversations")
+async def oversight_conversations(user: str = "jesse_martinez_jr", limit: int = 50,
+                                  offset: int = 0, since_block: int = None,
+                                  until_block: int = None, x_user: str = Header(default="")):
+    """Paginated, untruncated conversation history. Recovers past Jesse AI
+    response texts in full (including the Oct 21 evening window)."""
+    if not _require_oversight(x_user):
+        return JSONResponse(status_code=403, content={"error": "Unauthorized"})
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    try:
+        from memory.conversation import get_history_page
+        total, messages = get_history_page(user, limit, offset, since_block, until_block)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    return {"total": total, "limit": limit, "offset": offset, "messages": messages}
+
+
+@app.get("/oversight/executions")
+async def oversight_executions(limit: int = 50, offset: int = 0, kind: str = None,
+                               since_block: int = None, until_block: int = None,
+                               x_user: str = Header(default="")):
+    """Paginated index of full execution records (from deploy day forward)."""
+    if not _require_oversight(x_user):
+        return JSONResponse(status_code=403, content={"error": "Unauthorized"})
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    try:
+        from memory.executions import list_executions
+        total, rows = list_executions(limit, offset, kind, since_block, until_block)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    return {"total": total, "limit": limit, "offset": offset, "executions": [
+        {"id": r["id"], "ts": r["ts"], "username": r["username"], "kind": r["kind"],
+         "command": (r["command"] or "")[:200], "ledger_index": r["ledger_index"],
+         "response_length": len(r["jesse_ai_response"] or ""),
+         "response_hash": r["response_hash"]}
+        for r in rows
+    ]}
+
+
+@app.get("/oversight/executions/{exec_id}")
+async def oversight_execution(exec_id: int, x_user: str = Header(default="")):
+    """One full execution record: complete stack_execution / build_result,
+    full Jesse AI response, spoken response."""
+    if not _require_oversight(x_user):
+        return JSONResponse(status_code=403, content={"error": "Unauthorized"})
+    try:
+        from memory.executions import get_execution
+        record = get_execution(exec_id)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    if record is None:
+        return JSONResponse(status_code=404, content={"error": "Execution not found"})
+    return record
 
 
 @app.get("/ledger")
@@ -1252,7 +1340,7 @@ async def consciousness_thought_by_id(thought_id: str):
 
 @app.post("/consciousness/trust/evaluate")
 async def consciousness_trust_evaluate(payload: TrustEvalRequest):
-    result = _trust_chain.evaluate(payload.subject, payload.dimensions,
+    result = _thought_chain.evaluate(payload.subject, payload.dimensions,
                                    engine=payload.engine or "quantum-trust-engine",
                                    weights=payload.weights or None,
                                    thought_refs=payload.thought_refs or None)
