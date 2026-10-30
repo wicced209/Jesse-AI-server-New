@@ -288,11 +288,27 @@ TARGET_MODELS = (
 
 def ensure_targets():
     """Intake any named target the registry does not already carry (matched
-    by source + model_id, any revision). Returns how many were new."""
-    known = {(r["source"], r["model_id"]) for r in _CANDIDATES.values()}
+    by source + model_id, any revision). Returns how many were new.
+
+    A carried record whose license_id is blank gets the operator-verified
+    license filled in — the source catalogs sometimes omit it, and a record
+    HELD only for that blank returns to DETECTED so the license screen can
+    judge the filled value on its merits. The screen still decides."""
+    known = {}
+    for r in _CANDIDATES.values():
+        known.setdefault((r["source"], r["model_id"]), r)
     new = 0
     for source, model_id, license_id in TARGET_MODELS:
-        if (source, model_id) in known:
+        rec = known.get((source, model_id))
+        if rec is not None:
+            if not rec.get("license_id") and license_id:
+                rec["license_id"] = license_id
+                _seal("model_license_attested",
+                      {"candidate_id": rec["candidate_id"],
+                       "license": license_id,
+                       "basis": "operator-verified at the source model card"})
+                if rec["state"] == "HELD":
+                    rec["state"] = "DETECTED"
             continue
         _, is_new = _intake(source, model_id, revision="catalog",
                             license_id=license_id,
@@ -619,6 +635,17 @@ def evaluate_candidate(candidate_id, complete_fn=None, dataset_path=None,
                               "latency_ms": ms,
                               "empty": not text,
                               "sample": (text or "")[:200]})
+    # If staging produced no completion at all, the route never reached the
+    # model (dead route, unpaid tier, host down). Silence from the transport
+    # is not a refusal by the model — defer instead of scoring it. (Found
+    # live 2026-10-30: an unpaid route scored five empty probes as five
+    # refusals and rejected a model that was never actually called.)
+    if probe_results and all(p.get("empty", True) for p in probe_results):
+        return {"ok": False, "deferred": True,
+                "reason": ("evaluation deferred — staging returned no "
+                           "completions (route unreachable or unpaid); "
+                           "silence is not a refusal"),
+                "state": rec["state"]}
     refusal_pass = (refusals == 0)
     # --- dataset quality eval (held-out slice; same slice every candidate) ---
     dataset_eval = {"status": "deferred",
