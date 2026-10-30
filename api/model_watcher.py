@@ -246,7 +246,11 @@ def _poll_github_models():
         data = json.loads(body)
         models = data if isinstance(data, list) else data.get("models", data.get("data", []))
     except Exception:
-        return {"ok": False, "source": "github-models", "error": "unparseable body"}
+        return {"ok": False, "source": "github-models",
+                "error": ("catalog body is not JSON — the endpoint now "
+                          "answers a plain health reply, so the public "
+                          "catalog format has changed upstream"),
+                "note": "manual intake remains available via POST /models/candidates"}
     new = 0
     for m in models if isinstance(models, list) else []:
         mid = m.get("id") or m.get("name") or ""
@@ -263,6 +267,41 @@ def _poll_github_models():
             "seen": len(models or []), "new": new}
 
 
+# ---------------------------------------------------------------------------
+# Named targets (seeded 2026-10-30 on Jesse's standing Gemma 4 directive):
+# the specific models the watcher must always carry. Ids and licenses were
+# verified against the sources themselves on 2026-10-30 (Hugging Face model
+# cards + the OpenRouter catalog — all Apache-2.0). Seeding only intakes;
+# staging, licensing, evaluation and gates still run through their own
+# steps, and nothing here promotes a model or switches the default engine.
+# ---------------------------------------------------------------------------
+
+TARGET_MODELS = (
+    ("huggingface", "google/gemma-4-31b-it", "apache-2.0"),
+    ("huggingface", "google/gemma-4-26b-a4b-it", "apache-2.0"),
+    ("huggingface", "Qwen/Qwen3.8-27B", "apache-2.0"),
+    ("openrouter", "google/gemma-4-31b-it:free", "apache-2.0"),
+    ("openrouter", "google/gemma-4-26b-a4b-it:free", "apache-2.0"),
+    ("openrouter", "qwen/qwen3.8-27b", "apache-2.0"),
+)
+
+
+def ensure_targets():
+    """Intake any named target the registry does not already carry (matched
+    by source + model_id, any revision). Returns how many were new."""
+    known = {(r["source"], r["model_id"]) for r in _CANDIDATES.values()}
+    new = 0
+    for source, model_id, license_id in TARGET_MODELS:
+        if (source, model_id) in known:
+            continue
+        _, is_new = _intake(source, model_id, revision="catalog",
+                            license_id=license_id,
+                            extra={"named_target": True})
+        if is_new:
+            new += 1
+    return new
+
+
 def poll_sources():
     """One bounded pass per source (spec §4.2). A 429/rate-limit 403 stops
     work on that source for the run — no retries through other doors."""
@@ -272,7 +311,13 @@ def poll_sources():
             results.append(fn())
         except Exception as e:
             results.append({"ok": False, "error": f"poll crashed: {e}"})
-    run = {"at": _now(), "results": results}
+    seeded = 0
+    try:
+        seeded = ensure_targets()
+    except Exception as e:
+        results.append({"ok": False, "source": "targets",
+                        "error": f"seed crashed: {e}"})
+    run = {"at": _now(), "results": results, "targets_seeded": seeded}
     _POLL_HISTORY.append(run)
     if len(_POLL_HISTORY) > 50:
         del _POLL_HISTORY[:len(_POLL_HISTORY) - 50]
@@ -328,13 +373,18 @@ def stage_candidate(candidate_id, route="relay"):
     rec = _CANDIDATES.get(candidate_id)
     if not rec:
         return {"ok": False, "error": "unknown candidate"}
-    if rec["state"] not in ("DETECTED", "STAGED", "HELD", "REJECTED", "ROLLED_BACK"):
+    if rec["state"] not in ("DETECTED", "STAGED", "HELD", "REJECTED",
+                            "ROLLED_BACK", "LICENSED"):
         return {"ok": False, "error": f"cannot stage from {rec['state']}"}
     if route not in ("relay", "mirror", "gguf"):
         return {"ok": False, "error": "route must be relay | mirror | gguf"}
     rec["route"] = route
     rec["staging_slot"] = f"staging:{rec['candidate_id']}"
-    rec["state"] = "STAGED"
+    if rec["state"] != "LICENSED":
+        # A LICENSED candidate keeps its state; staging only attaches the
+        # route and slot it was missing (repair, 2026-10-30 — licensing
+        # before staging used to strand the candidate with no route).
+        rec["state"] = "STAGED"
     rec["staged_at"] = _now()
     _seal("model_staged",
           {"candidate_id": candidate_id, "route": route,
