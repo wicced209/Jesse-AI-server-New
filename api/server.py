@@ -52,6 +52,12 @@ app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
     version=VERSION,
     description=f"Sovereign AI Stack — {SOVEREIGN_OWNER}",
+    # Fortress residual fix 2026-10-31: the public API documentation and
+    # route listing are disabled. The route map is no longer public
+    # information; every private route is owner-guarded regardless.
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 app.add_middleware(
@@ -607,7 +613,21 @@ async def receive_telemetry(req: TelemetryRequest):
     Phone-home receiving end. Deployed CRSMCPAI Alpha instances
     send telemetry here. Validated, then absorbed into the
     immutable ledger.
+
+    Fortress residual fix 2026-10-31: the payload must carry a valid
+    signature from an ENROLLED, active telemetry source (node_id is
+    the source id). Unsigned or unenrolled telemetry is refused
+    before absorption; the signed /telemetry/ingest lane is the
+    batch door.
     """
+    gate = telemetry_ingest.verify_node_signature(
+        req.node_id, req.timestamp, req.data, req.signature)
+    if not gate.get("ok"):
+        return JSONResponse(status_code=403, content={
+            "CRSMCPAI_ALPHA": "TELEMETRY_REJECTED",
+            "absorbed": False,
+            "reason": "signature gate: " + str(gate.get("error")),
+        })
     from core.directive_hub import absorb_telemetry
     result = absorb_telemetry(req.model_dump())
     status_code = 200 if result.get("absorbed") else 400
