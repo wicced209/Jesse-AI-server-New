@@ -320,3 +320,8 @@ def registry_status():
                   "credential (revocation is the instant remedy). "
                   "The secret itself is never stored or sealed.",
     }
+
+# Permanence verification 2026-10-31: revocation seals live in the
+# Golden Ledger; this registry rebuilds from those seals on startup,
+# so bans survive restarts and redeploys. Verified end to end on the
+# live deployment by Muse with Jesse AI confirming from its side.
