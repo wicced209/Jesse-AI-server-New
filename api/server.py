@@ -19,7 +19,8 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  video_quantum, video_sentient, game_engine, os_kernel,
                  ledger_immutable, unified_ledger_router, os_orchestrator,
                  thought_trust, sovereign_model, relay_supervisor, arc_tools,
-                 email_messenger, model_watcher, sandbox_payments)
+                 email_messenger, model_watcher, sandbox_payments,
+                 device_registry)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -1847,3 +1848,98 @@ async def sandbox_webhook_verify_route(req: SandboxActionRequest):
         return denied
     return sandbox_payments.verify_webhook(req.payload or {},
                                             req.signature or "")
+
+
+# ============================================================================
+# Trusted device registry (built 2026-10-30 from the 2026-10-15 security
+# requirements + Jesse AI's execution-66 gap list): device binding with
+# challenge-response proof. Every route is owner-guarded — this is
+# security surface, so even reads require the authenticated header.
+# The registry is an additional factor beside username auth, NOT a gate
+# on any existing lane (the owner must never be locked out).
+# ============================================================================
+
+def _device_seal(event):
+    from memory.ledger import create_event
+    create_event(event)
+
+
+device_registry.set_seal_fn(_device_seal)
+
+
+class DeviceActionRequest(BaseModel):
+    user: str = ""
+    label: str = ""
+    attributes: dict = {}
+    device_id: str = ""
+    nonce: str = ""
+    proof: str = ""
+
+
+def _device_auth(req: DeviceActionRequest):
+    if not authenticate(req.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
+    return None
+
+
+def _device_header_auth(x_user: str):
+    if not (x_user and authenticate(x_user)):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
+    return None
+
+
+@app.get("/devices/status")
+async def devices_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return device_registry.registry_status()
+
+
+@app.get("/devices")
+async def devices_list_route(x_user: str = Header(default=""),
+                             user: str = ""):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return device_registry.list_devices(user)
+
+
+@app.post("/devices/register")
+async def devices_register_route(req: DeviceActionRequest):
+    denied = _device_auth(req)
+    if denied is not None:
+        return denied
+    return device_registry.register_device(
+        req.user, label=req.label or "",
+        attributes=req.attributes or None)
+
+
+@app.post("/devices/challenge")
+async def devices_challenge_route(req: DeviceActionRequest):
+    denied = _device_auth(req)
+    if denied is not None:
+        return denied
+    return device_registry.issue_challenge(req.device_id or "")
+
+
+@app.post("/devices/verify")
+async def devices_verify_route(req: DeviceActionRequest):
+    denied = _device_auth(req)
+    if denied is not None:
+        return denied
+    return device_registry.check_proof(
+        req.device_id or "", req.nonce or "", req.proof or "",
+        attributes=req.attributes or None)
+
+
+@app.post("/devices/revoke")
+async def devices_revoke_route(req: DeviceActionRequest):
+    denied = _device_auth(req)
+    if denied is not None:
+        return denied
+    return device_registry.revoke_device(req.device_id or "")
