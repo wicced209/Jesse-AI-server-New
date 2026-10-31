@@ -21,7 +21,7 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  thought_trust, sovereign_model, relay_supervisor, arc_tools,
                  email_messenger, model_watcher, sandbox_payments,
                  device_registry, settlement_records, telemetry_ingest,
-                 voice_fallback)
+                 voice_fallback, key_license_registry)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -2233,3 +2233,89 @@ async def voice_revoke_route(req: VoiceActionRequest):
     if denied is not None:
         return denied
     return voice_fallback.revoke_speaker(req.speaker_id or "")
+
+
+# ============================================================================
+# Sovereign key & license registry (built 2026-10-31 at Jesse's
+# directive, from Jesse AI's execution-75 design): the ONLY issuing
+# authority is the superadmin owner; verification is default-deny;
+# bans are sealed in the Golden Ledger and rebuilt on startup, so a
+# forged or fraudulent key or license cannot be used or manufactured,
+# and a revocation can never be quietly undone. Every route is
+# owner-guarded — this is the security core, so even reads require
+# the authenticated header.
+# ============================================================================
+
+key_license_registry.set_seal_fn(_device_seal)
+
+
+def _cred_scan():
+    from memory.ledger import get_ledger
+    return get_ledger()
+
+
+key_license_registry.set_scan_fn(_cred_scan)
+
+
+class CredActionRequest(BaseModel):
+    user: str = ""
+    kind: str = ""
+    holder: str = ""
+    scope: str = ""
+    expires_days: int = 0
+    cred_id: str = ""
+    secret: str = ""
+    proof: str = ""
+    reason: str = ""
+
+
+def _cred_auth(req: CredActionRequest):
+    if not authenticate(req.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
+    return None
+
+
+@app.get("/credentials/status")
+async def credentials_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return key_license_registry.registry_status()
+
+
+@app.get("/credentials")
+async def credentials_list_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return key_license_registry.list_credentials()
+
+
+@app.post("/credentials/issue")
+async def credentials_issue_route(req: CredActionRequest):
+    denied = _cred_auth(req)
+    if denied is not None:
+        return denied
+    return key_license_registry.issue_credential(
+        req.kind or "", req.holder or "", req.scope or "",
+        expires_days=(req.expires_days or None))
+
+
+@app.post("/credentials/verify")
+async def credentials_verify_route(req: CredActionRequest):
+    denied = _cred_auth(req)
+    if denied is not None:
+        return denied
+    return key_license_registry.verify_credential(
+        req.cred_id or "", req.secret or "", req.proof or "")
+
+
+@app.post("/credentials/revoke")
+async def credentials_revoke_route(req: CredActionRequest):
+    denied = _cred_auth(req)
+    if denied is not None:
+        return denied
+    return key_license_registry.revoke_credential(
+        req.cred_id or "", req.reason or "")
