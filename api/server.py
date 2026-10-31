@@ -645,6 +645,22 @@ async def send_pulse(req: PulseRequest):
 class DemoCommandRequest(BaseModel):
     command: str
     use_llm: bool = True
+    source: str = ""
+
+
+def _demo_source_tag(payload: DemoCommandRequest, request: Request) -> str:
+    """Resolve a demo command's source tag (2026-10-30). An
+    authenticated x-user header outranks any claimed source — the
+    public cannot forge 'team'. A client may claim 'chip' (a starter
+    question) or 'visitor' (typed by a person). Anything else, or no
+    claim at all, seals as 'untagged': unknown traffic is never
+    dressed up as visitor demand."""
+    x_user = request.headers.get("x-user", "") if request else ""
+    if x_user and authenticate(x_user):
+        return "team"
+    if payload.source in ("chip", "visitor"):
+        return payload.source
+    return "untagged"
 
 
 @app.get("/demo/status")
@@ -658,11 +674,13 @@ async def demo_status():
 
 
 @app.post("/demo/command")
-async def demo_command(payload: DemoCommandRequest):
+async def demo_command(payload: DemoCommandRequest, request: Request):
     start = time.time()
     try:
         cmd = payload.command.strip()[:2000]
-        stack_result = dominion.process(cmd, "demo_visitor")
+        source_tag = _demo_source_tag(payload, request)
+        stack_result = dominion.process(cmd, "demo_visitor",
+                                        source_tag=source_tag)
         response_text = None
         if payload.use_llm:
             try:
@@ -679,6 +697,7 @@ async def demo_command(payload: DemoCommandRequest):
         return {
             "demo": True,
             "command": cmd[:200],
+            "source_tag": source_tag,
             "jesse_ai_response": response_text,
             "execution_ms": round((time.time() - start) * 1000, 2),
         }
