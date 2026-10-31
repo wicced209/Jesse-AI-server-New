@@ -19,7 +19,7 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  video_quantum, video_sentient, game_engine, os_kernel,
                  ledger_immutable, unified_ledger_router, os_orchestrator,
                  thought_trust, sovereign_model, relay_supervisor, arc_tools,
-                 email_messenger, model_watcher)
+                 email_messenger, model_watcher, sandbox_payments)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -1734,3 +1734,97 @@ async def models_rollback(channel: str, req: ModelActionRequest):
         return denied
     return model_watcher.rollback_channel(channel, _relay_supervisor,
                                           req.reason or "manual rollback")
+
+
+# ============================================================================
+# Sandbox transaction test environment (built 2026-10-30 from Jesse AI's
+# spec, executions 66/67): test tokens, mock ledger records, simulated
+# payment payloads. Sandbox only — no real money, no provider calls,
+# production ledger never written. Mutations require superadmin auth,
+# same as the model watcher.
+# ============================================================================
+
+class SandboxActionRequest(BaseModel):
+    user: str = ""
+    amount_cents: int = 0
+    currency: str = "usd"
+    idempotency_key: str = ""
+    description: str = ""
+    token: str = ""
+    event_type: str = ""
+    payload: dict = {}
+    signature: str = ""
+
+
+def _sandbox_auth(req: SandboxActionRequest):
+    if not authenticate(req.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
+    return None
+
+
+@app.get("/sandbox/status")
+async def sandbox_status_route():
+    return sandbox_payments.sandbox_status()
+
+
+@app.get("/sandbox/tokens")
+async def sandbox_tokens_route():
+    return sandbox_payments.list_tokens()
+
+
+@app.get("/sandbox/ledger")
+async def sandbox_ledger_route(limit: int = 50):
+    return sandbox_payments.mock_ledger(limit)
+
+
+@app.get("/sandbox/intents/{intent_id}")
+async def sandbox_get_intent_route(intent_id: str):
+    return sandbox_payments.get_intent(intent_id)
+
+
+@app.post("/sandbox/intents")
+async def sandbox_create_intent_route(req: SandboxActionRequest):
+    denied = _sandbox_auth(req)
+    if denied is not None:
+        return denied
+    return sandbox_payments.create_intent(
+        req.amount_cents, currency=req.currency or "usd",
+        idempotency_key=req.idempotency_key or "",
+        description=req.description or "")
+
+
+@app.post("/sandbox/intents/{intent_id}/confirm")
+async def sandbox_confirm_route(intent_id: str, req: SandboxActionRequest):
+    denied = _sandbox_auth(req)
+    if denied is not None:
+        return denied
+    return sandbox_payments.confirm_intent(intent_id, req.token or "")
+
+
+@app.post("/sandbox/intents/{intent_id}/refund")
+async def sandbox_refund_route(intent_id: str, req: SandboxActionRequest):
+    denied = _sandbox_auth(req)
+    if denied is not None:
+        return denied
+    return sandbox_payments.refund_intent(intent_id)
+
+
+@app.post("/sandbox/webhooks/simulate")
+async def sandbox_webhook_simulate_route(req: SandboxActionRequest):
+    denied = _sandbox_auth(req)
+    if denied is not None:
+        return denied
+    intent_id = (req.payload or {}).get("intent_id", "")
+    return sandbox_payments.simulate_webhook(intent_id,
+                                             req.event_type or "")
+
+
+@app.post("/sandbox/webhooks/verify")
+async def sandbox_webhook_verify_route(req: SandboxActionRequest):
+    denied = _sandbox_auth(req)
+    if denied is not None:
+        return denied
+    return sandbox_payments.verify_webhook(req.payload or {},
+                                            req.signature or "")
