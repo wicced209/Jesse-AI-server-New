@@ -22,7 +22,7 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  email_messenger, model_watcher, sandbox_payments,
                  device_registry, settlement_records, telemetry_ingest,
                  voice_fallback, key_license_registry, integrity_check,
-                 public_guard, pattern_watch)
+                 public_guard, pattern_watch, output_watermark)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -783,6 +783,9 @@ async def demo_command(payload: DemoCommandRequest, request: Request):
         # visitors; the record of the command is its ledger seal, not
         # a line pasted onto every answer.
         response_text = str(response_text).rstrip()
+        # Anti-distillation build 4: keyed contraction-choice mark on
+        # public answers (provenance evidence; meaning unchanged).
+        response_text = output_watermark.mark(response_text)
         return {
             "demo": True,
             "command": cmd[:200],
@@ -2368,6 +2371,28 @@ async def integrity_rebaseline_route(x_user: str = Header(default="")):
 # seal PUBLIC_GUARD_ALERT; the owner can clear a client instantly.
 public_guard.set_seal_fn(_device_seal)
 pattern_watch.set_seal_fn(_device_seal)
+output_watermark.set_seal_fn(_device_seal)
+
+
+class WatermarkVerifyRequest(BaseModel):
+    user: str = ""
+    text: str = ""
+
+
+@app.get("/watermark/status")
+async def watermark_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return output_watermark.watermark_status()
+
+
+@app.post("/watermark/verify")
+async def watermark_verify_route(payload: WatermarkVerifyRequest):
+    denied = _device_header_auth(payload.user)
+    if denied is not None:
+        return denied
+    return output_watermark.verify(payload.text)
 
 
 @app.get("/watch/status")
