@@ -111,6 +111,36 @@ def register_source(user, label=""):
         "source_secret": secret_value, "secret_shown_once": True}}
 
 
+def verify_node_signature(source_id, timestamp, data, signature):
+    """Verify a legacy phone-home payload against an ENROLLED telemetry
+    source. The node_id must be an active source id from this module's
+    registry, and the signature must be HMAC-SHA3-512 over the canonical
+    {data, node_id, timestamp} body, keyed by the source's stored
+    secret hash — the same construction sign_batch uses for batches.
+    Added 2026-10-31 (fortress residual) so the legacy /telemetry lane
+    demands the same proof as /telemetry/ingest."""
+    rec = _SOURCES.get(source_id or "")
+    if not rec:
+        return {"ok": False, "error": "unknown_source"}
+    if rec["state"] != "ACTIVE":
+        return {"ok": False, "error": "source_revoked"}
+    body = {"data": data, "node_id": source_id, "timestamp": timestamp}
+    expected = hmac.new(rec["secret_hash"].encode(),
+                        (_canon(body) + "|" + str(timestamp)).encode(),
+                        hashlib.sha3_512).hexdigest()
+    if not hmac.compare_digest(expected, str(signature or "")):
+        return {"ok": False, "error": "bad_signature"}
+    return {"ok": True, "source_id": source_id}
+
+
+def sign_node(secret_value, source_id, timestamp, data):
+    """What a legacy phone-home node computes to sign its payload."""
+    body = {"data": data, "node_id": source_id, "timestamp": timestamp}
+    return hmac.new(_key(secret_value).encode(),
+                    (_canon(body) + "|" + str(timestamp)).encode(),
+                    hashlib.sha3_512).hexdigest()
+
+
 def revoke_source(source_id):
     rec = _SOURCES.get(source_id)
     if not rec:
