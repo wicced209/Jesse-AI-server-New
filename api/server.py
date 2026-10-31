@@ -22,7 +22,7 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  email_messenger, model_watcher, sandbox_payments,
                  device_registry, settlement_records, telemetry_ingest,
                  voice_fallback, key_license_registry, integrity_check,
-                 public_guard, pattern_watch, output_watermark)
+                 public_guard, pattern_watch, output_watermark, honeypot)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -2376,6 +2376,25 @@ public_guard.set_seal_fn(_device_seal)
 pattern_watch.set_seal_fn(_device_seal)
 output_watermark.set_seal_fn(_device_seal)
 output_watermark.set_scan_fn(_cred_scan)
+honeypot.set_seal_fn(_device_seal)
+
+
+async def _honeypot_handler(request: Request):
+    honeypot.touch(request.method, request.url.path,
+                   public_guard.client_key(request))
+    return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+
+for _hp_method, _hp_path in honeypot.BAIT_PATHS:
+    app.add_api_route(_hp_path, _honeypot_handler, methods=[_hp_method])
+
+
+@app.get("/honeypot/status")
+async def honeypot_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return honeypot.honeypot_status()
 
 
 class WatermarkVerifyRequest(BaseModel):
