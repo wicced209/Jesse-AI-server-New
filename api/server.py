@@ -87,14 +87,14 @@ app.include_router(package_router)
 
 class CommandRequest(BaseModel):
     command: str
-    user: str = "jesse_martinez_jr"
+    user: str = ""
     # Direct CRSMCPAI Alpha V2 execution is authoritative; an LLM is optional.
     use_llm: bool = False
 
 
 class QueryRequest(BaseModel):
     query: str
-    user: str = "jesse_martinez_jr"
+    user: str = ""
     use_llm: bool = True
 
 
@@ -303,7 +303,7 @@ async def query(req: QueryRequest):
 
 class BuildRequest(BaseModel):
     command: str
-    user: str = "jesse_martinez_jr"
+    user: str = ""
     use_llm: bool = True
 
 
@@ -459,7 +459,7 @@ def _require_oversight(x_user: str):
 
 
 @app.get("/oversight/conversations")
-async def oversight_conversations(user: str = "jesse_martinez_jr", limit: int = 50,
+async def oversight_conversations(user: str = "", limit: int = 50,
                                   offset: int = 0, since_block: int = None,
                                   until_block: int = None, x_user: str = Header(default="")):
     """Paginated, untruncated conversation history. Recovers past Jesse AI
@@ -533,8 +533,16 @@ async def log():
 
 
 @app.get("/memory")
-async def memory_status(user: str = "jesse_martinez_jr"):
-    """Sovereign conversation memory status — immutable, never forgetting."""
+async def memory_status(user: str = "", x_user: str = Header(default="")):
+    """Sovereign conversation memory status — immutable, never forgetting.
+
+    Owner-guarded (fortress fix 2026-10-31): this returns the owner's
+    conversation history, so it requires the owner's header like every
+    other private surface. It previously answered anyone."""
+    if not (x_user and authenticate(x_user)):
+        return JSONResponse(status_code=403,
+                            content={"error": "Unauthorized"})
+    user = user or x_user
     from memory.conversation import get_history, count_messages
     from memory.ledger import verify_chain, GENESIS
     history = get_history(user, limit=5)
@@ -555,7 +563,7 @@ async def memory_status(user: str = "jesse_martinez_jr"):
 
 class DirectiveRequest(BaseModel):
     command: str
-    user: str = "jesse_martinez_jr"
+    user: str = ""
     scope: str = "global"
     priority: str = "sovereign"
 
@@ -612,7 +620,7 @@ async def receive_telemetry(req: TelemetryRequest):
 
 class PulseRequest(BaseModel):
     message: str
-    user: str = "jesse_martinez_jr"
+    user: str = ""
     target: str = "all"
 
 
@@ -1227,7 +1235,13 @@ async def ledger_unified_entry(seal: str):
 
 # ---- #53 File upload/download (100MB, re-integrated directly) ----
 @app.post("/api/files/upload")
-async def files_upload(file: UploadFile = File(...)):
+async def files_upload(file: UploadFile = File(...),
+                       x_user: str = Header(default="")):
+    # Owner-guarded (fortress fix 2026-10-31): anonymous uploads to the
+    # sovereign server are not permitted.
+    if not (x_user and authenticate(x_user)):
+        return JSONResponse(status_code=403,
+                            content={"error": "superadmin auth required"})
     try:
         name = (file.filename or "").strip()
         if not name:
@@ -1265,7 +1279,11 @@ async def files_upload(file: UploadFile = File(...)):
 
 
 @app.get("/api/files/download/{filename}")
-async def files_download(filename: str):
+async def files_download(filename: str, x_user: str = Header(default="")):
+    # Owner-guarded (fortress fix 2026-10-31), matching the upload side.
+    if not (x_user and authenticate(x_user)):
+        return JSONResponse(status_code=403,
+                            content={"error": "superadmin auth required"})
     try:
         safe = Path(filename).name
         fp = (_FILE_UPLOAD_DIR / safe).resolve()
@@ -1441,12 +1459,12 @@ async def consciousness_trust_subject(subject: str):
 
 class SovereignMediateRequest(BaseModel):
     prompt: str = ""
-    user: str = "jesse_martinez_jr"
+    user: str = ""
 
 
 class SovereignGenerateRequest(BaseModel):
     prompt: str = ""
-    user: str = "jesse_martinez_jr"
+    user: str = ""
     prefer_sovereign: bool = True
     allow_relay_fallback: bool = True
 
@@ -1485,6 +1503,10 @@ async def sovereign_model_backend_toggle(backend_id: str, enabled: bool = True):
 
 @app.post("/sovereign-model/mediate")
 async def sovereign_model_mediate(payload: SovereignMediateRequest):
+    if not authenticate(payload.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"error": "Unauthorized",
+                                     "user": payload.user})
     result = _sovereign_runtime.mediate(payload.prompt, payload.user)
     if not result.get("ok"):
         return JSONResponse(status_code=400, content=result)
@@ -1493,6 +1515,10 @@ async def sovereign_model_mediate(payload: SovereignMediateRequest):
 
 @app.post("/sovereign-model/generate")
 async def sovereign_model_generate(payload: SovereignGenerateRequest):
+    if not authenticate(payload.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"error": "Unauthorized",
+                                     "user": payload.user})
     result = _sovereign_runtime.generate(
         payload.prompt, payload.user, payload.prefer_sovereign,
         payload.allow_relay_fallback)
@@ -1624,11 +1650,19 @@ async def arc_tool_describe(tool_id: str):
 
 
 @app.post("/arc/operate")
-async def arc_operate(payload: ArcOperateRequest):
+async def arc_operate(payload: ArcOperateRequest,
+                      x_user: str = Header(default="")):
+    # Owner-guarded (fortress fix 2026-10-31): ARC tools execute under
+    # the caller's identity; this route previously ran them for anyone
+    # under the owner's name. Strangers' authority is zero.
+    if not (x_user and authenticate(x_user)):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
     result = await asyncio.to_thread(
         _arc_registry.operate,
         payload.tool_id, payload.action, payload.params or {},
-        "jesse_martinez_jr")
+        x_user)
     if not result.get("ok"):
         return JSONResponse(status_code=400, content=result)
     return result
