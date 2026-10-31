@@ -674,6 +674,37 @@ async def demo_status():
     }
 
 
+def _clean_demo_answer(text: str) -> str:
+    """Enforce the demo lane's contract at its exit (2026-10-30):
+    public demo answers are answer-only. The relay's formatting layer
+    prepends wrapper lines to generated text (a verification line, a
+    block/status header, boot-context headers, a bare fingerprint
+    line). Strip ONLY leading lines matching those wrapper shapes;
+    stop at the first line that is answer content, and never touch
+    anything after it. The owner's private command lane is separate
+    and keeps its full format."""
+    import re as _re
+    wrapper_patterns = [
+        _re.compile(r"^\s*verification\s+sovereign\s+living\s+master\s+key\b", _re.I),
+        _re.compile(r"^\s*CRSMCPAI\s+Alpha\s+V2\s*—\s*Block\s*:", _re.I),
+        _re.compile(r"^\s*(boot\s*context|execution\s+report)\b", _re.I),
+        _re.compile(r"^\s*[0-9a-f]{64}\s*$"),
+        _re.compile(r"^\s*(status|owner|superadmin)\s*:\s*(SECURE_ACTIVE|SLMK)\b", _re.I),
+    ]
+    lines = str(text).split("\n")
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        if not line.strip():
+            idx += 1
+            continue
+        if any(p.search(line) for p in wrapper_patterns):
+            idx += 1
+            continue
+        break
+    return "\n".join(lines[idx:]).strip()
+
+
 @app.post("/demo/command")
 async def demo_command(payload: DemoCommandRequest, request: Request):
     start = time.time()
@@ -692,6 +723,8 @@ async def demo_command(payload: DemoCommandRequest, request: Request):
                 )
             except Exception:
                 response_text = None
+        if response_text:
+            response_text = _clean_demo_answer(response_text) or None
         if not response_text:
             response_text = f"Command '{cmd}' processed by CRSMCPAI Alpha."
         # Demo answers are answer-only (2026-10-30 source cleanup): no
