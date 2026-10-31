@@ -2,6 +2,13 @@
 CRSMCPAI Alpha - Sovereign File Upload/Download Demo Router
 Superadmin: SLMK Jesse Martinez Junior
 Genesis Hash: 92038cafccc7192535bd475cca985d03000d89962b8dc96f6664081663559b1b
+
+STATUS (2026-10-31, fortress audit): NOT WIRED. This router is not
+imported or included anywhere in the application; it exposes no live
+routes. The live file routes are the owner-guarded handlers in
+api/server.py. Retained on disk under the standing preservation rule
+(nothing is deleted). Do not include this router without owner
+authentication equivalent to the server.py file routes.
 """
 
 import os
