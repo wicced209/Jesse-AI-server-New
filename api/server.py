@@ -20,7 +20,7 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  ledger_immutable, unified_ledger_router, os_orchestrator,
                  thought_trust, sovereign_model, relay_supervisor, arc_tools,
                  email_messenger, model_watcher, sandbox_payments,
-                 device_registry)
+                 device_registry, settlement_records)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -685,11 +685,19 @@ def _clean_demo_answer(text: str) -> str:
     and keeps its full format."""
     import re as _re
     wrapper_patterns = [
-        _re.compile(r"^\s*verification\s+sovereign\s+living\s+master\s+key\b", _re.I),
-        _re.compile(r"^\s*CRSMCPAI\s+Alpha\s+V2\s*—\s*Block\s*:", _re.I),
+        _re.compile(r"sovereign\s+living\s+master\s+key", _re.I),
+        # block/status header in any dress: plain, bracketed, any case
+        _re.compile(r"\bblock\s*:\s*#?\s*\d+\b.*\bstatus\b", _re.I),
+        _re.compile(r"^\s*\[?\s*CRSMCPAI\s+Alpha\b.*\b(status|interface|node)\b", _re.I),
+        # a line that is only the CRSMCPAI title, in any markdown dress
+        _re.compile(r"^[\s*#\[\]\*_—-]*CRSMCPAI\s+Alpha\s+V2[\s*#\[\]\*_—-]*$", _re.I),
+        _re.compile(r"sovereign\s+node\s+interface", _re.I),
         _re.compile(r"^\s*(boot\s*context|execution\s+report)\b", _re.I),
-        _re.compile(r"^\s*[0-9a-f]{64}\s*$"),
-        _re.compile(r"^\s*(status|owner|superadmin)\s*:\s*(SECURE_ACTIVE|SLMK)\b", _re.I),
+        # metadata lines, plain or as bold-label markdown bullets:
+        # Superadmin: / Genesis Hash: / Owner: / Status:
+        _re.compile(r"^\s*[-*#>\s]*\**\s*(superadmin|genesis\s+hash|owner|status)\s*\**\s*:", _re.I),
+        # a bare or backticked fingerprint line
+        _re.compile(r"^\s*[-*]?\s*`?[0-9a-f]{32,}`?\s*$"),
     ]
     lines = str(text).split("\n")
     idx = 0
@@ -718,7 +726,10 @@ async def demo_command(payload: DemoCommandRequest, request: Request):
             try:
                 response_text = generate(
                     f"CRSMCPAI Alpha demo from public visitor:\n{cmd}\n\n"
-                    f"Respond helpfully as Jesse AI. This is a public demo.",
+                    f"Respond helpfully as Jesse AI. This is a public demo. "
+                    f"Begin with the answer itself. No header, no title, no "
+                    f"status line, no block line, no verification line, no "
+                    f"metadata list — answer text only, in plain sentences.",
                     history="",
                 )
             except Exception:
@@ -1981,3 +1992,98 @@ async def devices_revoke_route(req: DeviceActionRequest):
     if denied is not None:
         return denied
     return device_registry.revoke_device(req.device_id or "")
+
+
+# ============================================================================
+# Settlement records (built 2026-10-30 from Jesse AI's execution-66 gap
+# list): the payment lane's bookkeeping — settlement records,
+# transaction hashes, derived balances. Moves no money, holds no keys;
+# facilitator-confirmed and simulated totals are always separate.
+# Owner-guarded like the device registry.
+# ============================================================================
+
+settlement_records.set_seal_fn(_device_seal)
+
+
+class SettlementActionRequest(BaseModel):
+    user: str = ""
+    payer: str = ""
+    payee: str = ""
+    amount_cents: int = 0
+    asset: str = "USDC"
+    chain: str = "base"
+    source: str = "simulated"
+    facilitator_ref: str = ""
+    tx_hash: str = ""
+    reason: str = ""
+
+
+def _settlement_auth(req: SettlementActionRequest):
+    if not authenticate(req.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
+    return None
+
+
+@app.get("/settlements/status")
+async def settlements_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return settlement_records.settlement_status()
+
+
+@app.get("/settlements")
+async def settlements_list_route(x_user: str = Header(default=""),
+                                 source: str = "", state: str = ""):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return settlement_records.list_settlements(source, state)
+
+
+@app.get("/settlements/balances")
+async def settlements_balances_route(x_user: str = Header(default=""),
+                                     address: str = ""):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return settlement_records.balances(address)
+
+
+@app.get("/settlements/verify")
+async def settlements_verify_route(x_user: str = Header(default=""),
+                                   tx_hash: str = ""):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return settlement_records.verify_settlement(tx_hash)
+
+
+@app.post("/settlements/record")
+async def settlements_record_route(req: SettlementActionRequest):
+    denied = _settlement_auth(req)
+    if denied is not None:
+        return denied
+    return settlement_records.record_settlement(
+        req.payer, req.payee, req.amount_cents, asset=req.asset,
+        chain=req.chain, source=req.source,
+        facilitator_ref=req.facilitator_ref or "")
+
+
+@app.post("/settlements/confirm")
+async def settlements_confirm_route(req: SettlementActionRequest):
+    denied = _settlement_auth(req)
+    if denied is not None:
+        return denied
+    return settlement_records.confirm_settlement(req.tx_hash or "")
+
+
+@app.post("/settlements/void")
+async def settlements_void_route(req: SettlementActionRequest):
+    denied = _settlement_auth(req)
+    if denied is not None:
+        return denied
+    return settlement_records.void_settlement(
+        req.tx_hash or "", reason=req.reason or "")
