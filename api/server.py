@@ -20,7 +20,8 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  ledger_immutable, unified_ledger_router, os_orchestrator,
                  thought_trust, sovereign_model, relay_supervisor, arc_tools,
                  email_messenger, model_watcher, sandbox_payments,
-                 device_registry, settlement_records)
+                 device_registry, settlement_records, telemetry_ingest,
+                 voice_fallback)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -2087,3 +2088,148 @@ async def settlements_void_route(req: SettlementActionRequest):
         return denied
     return settlement_records.void_settlement(
         req.tx_hash or "", reason=req.reason or "")
+
+
+# ============================================================================
+# Telemetry ingestion intake (built 2026-10-30 from the execution-66 gap
+# list): the guarded receiving door for the data-pull lane. Sources
+# enroll with the owner and sign every batch; owner reads are guarded;
+# the ingest route itself is signature-authenticated by design.
+# ============================================================================
+
+telemetry_ingest.set_seal_fn(_device_seal)
+
+
+class TelemetrySourceRequest(BaseModel):
+    user: str = ""
+    label: str = ""
+    source_id: str = ""
+
+
+class TelemetryIngestRequest(BaseModel):
+    source_id: str = ""
+    sequence: int = 0
+    timestamp: float = 0
+    events: list = []
+    signature: str = ""
+
+
+@app.post("/telemetry/sources")
+async def telemetry_register_route(req: TelemetrySourceRequest):
+    if not authenticate(req.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
+    return telemetry_ingest.register_source(req.user,
+                                            label=req.label or "")
+
+
+@app.post("/telemetry/sources/revoke")
+async def telemetry_revoke_route(req: TelemetrySourceRequest):
+    if not authenticate(req.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
+    return telemetry_ingest.revoke_source(req.source_id or "")
+
+
+@app.get("/telemetry/status")
+async def telemetry_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return telemetry_ingest.ingest_status()
+
+
+@app.get("/telemetry/recent")
+async def telemetry_recent_route(x_user: str = Header(default=""),
+                                 source_id: str = "", limit: int = 10):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return telemetry_ingest.recent_batches(source_id, limit)
+
+
+@app.post("/telemetry/ingest")
+async def telemetry_ingest_route(req: TelemetryIngestRequest):
+    return telemetry_ingest.ingest(
+        req.source_id or "", req.sequence, req.timestamp,
+        req.events or [], req.signature or "")
+
+
+# ============================================================================
+# Voice fallback speaker registry (built 2026-10-30 from the 2026-10-15
+# security requirements + execution-66 gap list): embedding registry
+# and cosine matching, proven with synthetic vectors. Real enrollment
+# waits on a working voice model and a sitting with the owner.
+# ============================================================================
+
+voice_fallback.set_seal_fn(_device_seal)
+
+
+class VoiceActionRequest(BaseModel):
+    user: str = ""
+    label: str = ""
+    speaker_id: str = ""
+    embedding: list = []
+    threshold: float = 0.85
+
+
+def _voice_auth(req: VoiceActionRequest):
+    if not authenticate(req.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
+    return None
+
+
+@app.get("/voice/status")
+async def voice_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return voice_fallback.voice_status()
+
+
+@app.get("/voice/speakers")
+async def voice_speakers_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return voice_fallback.list_speakers()
+
+
+@app.post("/voice/enroll")
+async def voice_enroll_route(req: VoiceActionRequest):
+    denied = _voice_auth(req)
+    if denied is not None:
+        return denied
+    return voice_fallback.enroll_speaker(
+        req.user, req.label or "", req.embedding or [])
+
+
+@app.post("/voice/sample")
+async def voice_sample_route(req: VoiceActionRequest):
+    denied = _voice_auth(req)
+    if denied is not None:
+        return denied
+    return voice_fallback.add_sample(req.speaker_id or "",
+                                     req.embedding or [])
+
+
+@app.post("/voice/verify")
+async def voice_verify_route(req: VoiceActionRequest):
+    denied = _voice_auth(req)
+    if denied is not None:
+        return denied
+    return voice_fallback.verify_speaker(
+        req.speaker_id or "", req.embedding or [],
+        threshold=req.threshold or 0.85)
+
+
+@app.post("/voice/revoke")
+async def voice_revoke_route(req: VoiceActionRequest):
+    denied = _voice_auth(req)
+    if denied is not None:
+        return denied
+    return voice_fallback.revoke_speaker(req.speaker_id or "")
