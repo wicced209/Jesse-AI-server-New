@@ -21,7 +21,7 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  thought_trust, sovereign_model, relay_supervisor, arc_tools,
                  email_messenger, model_watcher, sandbox_payments,
                  device_registry, settlement_records, telemetry_ingest,
-                 voice_fallback, key_license_registry)
+                 voice_fallback, key_license_registry, integrity_check)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -2309,6 +2309,44 @@ def _cred_scan():
 
 
 key_license_registry.set_scan_fn(_cred_scan)
+
+
+# ── Module integrity verification (anti-distillation build 1, 2026-10-31) ──
+# Deployed file hashes are checked against a baseline sealed in the
+# ledger. The baseline never updates itself; a new one is sealed only
+# through the owner-guarded rebaseline route after a legitimate deploy.
+integrity_check.set_seal_fn(_device_seal)
+integrity_check.set_scan_fn(_cred_scan)
+integrity_check.set_root_dir(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    integrity_check.ensure_baseline()
+except Exception:
+    pass
+
+
+@app.get("/integrity/status")
+async def integrity_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return integrity_check.integrity_status()
+
+
+@app.post("/integrity/verify")
+async def integrity_verify_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return integrity_check.verify()
+
+
+@app.post("/integrity/rebaseline")
+async def integrity_rebaseline_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return integrity_check.rebaseline(x_user)
 
 
 class CredActionRequest(BaseModel):
