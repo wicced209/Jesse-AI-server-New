@@ -694,7 +694,12 @@ async def demo_command(payload: DemoCommandRequest, request: Request):
                 response_text = None
         if not response_text:
             response_text = f"Command '{cmd}' processed by CRSMCPAI Alpha."
-        response_text = str(response_text).rstrip() + "\n\nVerification: sovereign living master key Jesse Martinez Junior."
+        # Demo answers are answer-only (2026-10-30 source cleanup): no
+        # verification line is appended here. That appended line was
+        # part of the wrapper text screen readers read aloud to blind
+        # visitors; the record of the command is its ledger seal, not
+        # a line pasted onto every answer.
+        response_text = str(response_text).rstrip()
         return {
             "demo": True,
             "command": cmd[:200],
