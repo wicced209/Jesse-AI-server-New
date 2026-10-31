@@ -786,6 +786,9 @@ async def demo_command(payload: DemoCommandRequest, request: Request):
         # Anti-distillation build 4: keyed contraction-choice mark on
         # public answers (provenance evidence; meaning unchanged).
         response_text = output_watermark.mark(response_text)
+        # Build 4 v2: seal the served answer's fingerprints so a
+        # harvested copy can be matched against the immutable record.
+        output_watermark.register_answer(response_text, source_tag)
         return {
             "demo": True,
             "command": cmd[:200],
@@ -2372,6 +2375,7 @@ async def integrity_rebaseline_route(x_user: str = Header(default="")):
 public_guard.set_seal_fn(_device_seal)
 pattern_watch.set_seal_fn(_device_seal)
 output_watermark.set_seal_fn(_device_seal)
+output_watermark.set_scan_fn(_cred_scan)
 
 
 class WatermarkVerifyRequest(BaseModel):
