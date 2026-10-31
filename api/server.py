@@ -22,7 +22,7 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  email_messenger, model_watcher, sandbox_payments,
                  device_registry, settlement_records, telemetry_ingest,
                  voice_fallback, key_license_registry, integrity_check,
-                 public_guard)
+                 public_guard, pattern_watch)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -753,6 +753,8 @@ async def demo_command(payload: DemoCommandRequest, request: Request):
             "message": "This demo is answering as fast as it fairly "
                        "can. Please wait a few minutes and try again.",
             "retry_after_seconds": public_guard.WINDOW_SECONDS})
+    pattern_watch.observe("demo", public_guard.client_key(request),
+                          payload.command)
     try:
         cmd = payload.command.strip()[:2000]
         source_tag = _demo_source_tag(payload, request)
@@ -2365,6 +2367,15 @@ async def integrity_rebaseline_route(x_user: str = Header(default="")):
 # Per-client rate limits on the public lanes (demo first). Breaches
 # seal PUBLIC_GUARD_ALERT; the owner can clear a client instantly.
 public_guard.set_seal_fn(_device_seal)
+pattern_watch.set_seal_fn(_device_seal)
+
+
+@app.get("/watch/status")
+async def watch_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return pattern_watch.watch_status()
 
 
 class GuardResetRequest(BaseModel):
