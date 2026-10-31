@@ -21,7 +21,8 @@ from api import (mesh_daemon, autoupdate, audio_quantum, audio_sentient,
                  thought_trust, sovereign_model, relay_supervisor, arc_tools,
                  email_messenger, model_watcher, sandbox_payments,
                  device_registry, settlement_records, telemetry_ingest,
-                 voice_fallback, key_license_registry, integrity_check)
+                 voice_fallback, key_license_registry, integrity_check,
+                 public_guard)
 from core.config import SYSTEM_NAME, VERSION, SOVEREIGN_OWNER, SOVEREIGN_DECLARATION, ARCHITECTURE_REGISTRY
 from core.logger import log_event, get_log
 from dominion.stack import dominion
@@ -745,6 +746,13 @@ def _clean_demo_answer(text: str) -> str:
 @app.post("/demo/command")
 async def demo_command(payload: DemoCommandRequest, request: Request):
     start = time.time()
+    gate = public_guard.check("demo", public_guard.client_key(request))
+    if not gate["allowed"]:
+        return JSONResponse(status_code=429, content={
+            "error": "rate_limited",
+            "message": "This demo is answering as fast as it fairly "
+                       "can. Please wait a few minutes and try again.",
+            "retry_after_seconds": public_guard.WINDOW_SECONDS})
     try:
         cmd = payload.command.strip()[:2000]
         source_tag = _demo_source_tag(payload, request)
@@ -841,10 +849,14 @@ def _demo_event_allowed():
 
 
 @app.post("/demo/event")
-async def demo_event(payload: DemoEventRequest):
+async def demo_event(payload: DemoEventRequest, request: Request):
     """Record one anonymous demo analytics event, sealed to the golden ledger."""
     if payload.event_type not in _DEMO_EVENT_TYPES:
         return JSONResponse(status_code=400, content={"error": "Unknown event type."})
+    gate = public_guard.check("demo_event",
+                              public_guard.client_key(request))
+    if not gate["allowed"]:
+        return JSONResponse(status_code=429, content={"error": "Rate limited."})
     if not _demo_event_allowed():
         return JSONResponse(status_code=429, content={"error": "Rate limited."})
     event = {
@@ -2347,6 +2359,36 @@ async def integrity_rebaseline_route(x_user: str = Header(default="")):
     if denied is not None:
         return denied
     return integrity_check.rebaseline(x_user)
+
+
+# ── Public surface guard (anti-distillation build 2, 2026-10-31) ──────────
+# Per-client rate limits on the public lanes (demo first). Breaches
+# seal PUBLIC_GUARD_ALERT; the owner can clear a client instantly.
+public_guard.set_seal_fn(_device_seal)
+
+
+class GuardResetRequest(BaseModel):
+    user: str = ""
+    lane: str = "demo"
+    client: str = ""
+
+
+@app.get("/guard/status")
+async def guard_status_route(x_user: str = Header(default="")):
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    return public_guard.guard_status()
+
+
+@app.post("/guard/reset")
+async def guard_reset_route(req: GuardResetRequest):
+    if not authenticate(req.user or ""):
+        return JSONResponse(status_code=403,
+                            content={"ok": False,
+                                     "error": "superadmin auth required"})
+    return public_guard.reset_client(req.lane or "demo",
+                                     req.client or "")
 
 
 class CredActionRequest(BaseModel):
