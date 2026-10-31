@@ -247,9 +247,18 @@ class DominionStack:
             "gate": gate,
         }
 
-    def process(self, command: str, user: str = "jesse_martinez_jr") -> dict:
+    def process(self, command: str, user: str = "jesse_martinez_jr",
+                source_tag: str = None) -> dict:
         log_event(f"[DOMINION] Command received — user={user}")
-        ledger_block = create_event({"command": command, "user": user})
+        seal_payload = {"command": command, "user": user}
+        if source_tag:
+            # Demo source tagging (2026-10-30): a demo command's seal
+            # carries where it came from (chip / visitor / team /
+            # untagged) so the record can never again mix starter
+            # questions and team testing into apparent visitor demand.
+            # Owner-lane calls pass no tag and seal exactly as before.
+            seal_payload["source_tag"] = source_tag
+        ledger_block = create_event(seal_payload)
         siren_result = siren.route(command)
         ls_result = latent_mapper.embed(ledger_block["hash"][:8], command)
         hp_result = hyperparameter_engine.sample(strategy="bayesian")
