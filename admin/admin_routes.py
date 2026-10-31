@@ -22,7 +22,7 @@ def _require_admin(x_user: str):
 
 
 @router.get("/status")
-def admin_status(x_user: str = Header(default="admin")):
+def admin_status(x_user: str = Header(default="")):
     """Overall system health."""
     _require_admin(x_user)
     return {
@@ -37,7 +37,7 @@ def admin_status(x_user: str = Header(default="admin")):
 
 
 @router.get("/ledger")
-def admin_ledger(x_user: str = Header(default="admin")):
+def admin_ledger(x_user: str = Header(default="")):
     """Dump the full immutable ledger."""
     _require_admin(x_user)
     chain = get_ledger()
@@ -49,7 +49,7 @@ def admin_ledger(x_user: str = Header(default="admin")):
 
 
 @router.get("/memory")
-def admin_memory(query: str = "", x_user: str = Header(default="admin")):
+def admin_memory(query: str = "", x_user: str = Header(default="")):
     """Inspect stored memory entries."""
     _require_admin(x_user)
     memories = retrieve_memory(query)
@@ -57,14 +57,14 @@ def admin_memory(query: str = "", x_user: str = Header(default="admin")):
 
 
 @router.get("/pqsvm")
-def admin_pqsvm(x_user: str = Header(default="admin")):
+def admin_pqsvm(x_user: str = Header(default="")):
     """PQSVM module status."""
     _require_admin(x_user)
     return pqsvm_status()
 
 
 @router.get("/modules")
-def admin_modules(x_user: str = Header(default="admin")):
+def admin_modules(x_user: str = Header(default="")):
     """List all registered MCP modules."""
     _require_admin(x_user)
     return mcp.list_modules()
