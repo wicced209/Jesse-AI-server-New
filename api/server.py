@@ -2512,3 +2512,141 @@ async def credentials_revoke_route(req: CredActionRequest):
         return denied
     return key_license_registry.revoke_credential(
         req.cred_id or "", req.reason or "")
+
+# ── Sandbox build families (2026-11-06) — endpoints directly in server.py ─────
+# Owner: SLMK Jesse Martinez Junior. No separate router files.
+
+@app.get("/family/nufire")
+async def family_nufire_status():
+    from nufire_family import family_status
+    return family_status()
+
+
+@app.get("/family/nufire/{name}")
+async def family_nufire_module(name: str):
+    from nufire_family import get_module
+    mod = get_module(name)
+    if not mod:
+        return JSONResponse({"error": "not found", "name": name}, status_code=404)
+    return mod.status()
+
+
+@app.post("/family/nufire/{name}/operate")
+async def family_nufire_operate(name: str, request: Request,
+                                x_user: str = Header(default="")):
+    # Owner-guarded (Muse fix 2026-11-06): the sandbox pass left this
+    # operate endpoint open; stranger authority stays zero.
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    from nufire_family import get_module
+    mod = get_module(name)
+    if not mod:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    return mod.operate(body)
+
+
+@app.get("/family/anomaly")
+async def family_anomaly_status():
+    from anomaly import anomaly_status
+    return anomaly_status()
+
+
+@app.get("/family/pqc")
+async def family_pqc_status():
+    from postquantum.real_pqc import real_pqc
+    return real_pqc.status()
+
+
+@app.get("/family/tethers")
+async def family_tethers_status():
+    from postquantum.tethers import quantum_tethers
+    return quantum_tethers.status()
+
+
+@app.get("/family/golden_ledgers")
+async def family_golden_ledgers():
+    from golden_ledgers import ledger_status
+    return ledger_status()
+
+
+@app.get("/family/sovereign_weights")
+async def family_sovereign_weights():
+    from sovereign_weights.pipeline import pipeline
+    return pipeline.status()
+
+
+@app.get("/family/guardian_ide")
+async def family_guardian_ide():
+    from guardian_ide import guardian_ide
+    return guardian_ide.status()
+
+
+@app.get("/family/phoenix")
+async def family_phoenix():
+    from phoenix.snapshot import phoenix
+    return phoenix.status()
+
+
+@app.get("/family/stego")
+async def family_stego():
+    from stego.crs_stego import crs_stego
+    return crs_stego.status()
+
+
+@app.get("/family/sccr")
+async def family_sccr():
+    from sccr.router import sccr
+    return sccr.status()
+
+
+@app.get("/family/v1")
+async def family_v1():
+    from v1_modules import v1_status
+    return v1_status()
+
+
+@app.get("/family/solva")
+async def family_solva():
+    from solva_modules import solva_status
+    return solva_status()
+
+
+@app.get("/family/build_summary")
+async def family_build_summary():
+    """Aggregate status of all families built in the 2026-11-06 sandbox pass."""
+    from nufire_family import family_status as nf
+    from anomaly import anomaly_status as an
+    from postquantum.real_pqc import real_pqc
+    from postquantum.tethers import quantum_tethers
+    from golden_ledgers import ledger_status as gl
+    from sovereign_weights.pipeline import pipeline
+    from guardian_ide import guardian_ide
+    from phoenix.snapshot import phoenix
+    from stego.crs_stego import crs_stego
+    from sccr.router import sccr
+    from v1_modules import v1_status
+    from solva_modules import solva_status
+    return {
+        "owner": SOVEREIGN_OWNER,
+        "build_pass": "2026-11-06",
+        "families": {
+            "nufire_tara_infinity": nf(),
+            "anomaly": an(),
+            "real_pqc": real_pqc.status(),
+            "quantum_tethers": quantum_tethers.status(),
+            "golden_ledgers_v23_v27": gl(),
+            "sovereign_weights": pipeline.status(),
+            "guardian_ide": guardian_ide.status(),
+            "phoenix": phoenix.status(),
+            "stego": crs_stego.status(),
+            "sccr": sccr.status(),
+            "v1_modules": v1_status(),
+            "solva_001_030": solva_status(),
+        },
+        "status": "LIVE",
+    }
