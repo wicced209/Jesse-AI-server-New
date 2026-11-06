@@ -1,0 +1,14 @@
+[
+  {
+    "index": 0,
+    "ts": 1794007278.1195455,
+    "owner": "SLMK Jesse Martinez Junior",
+    "payload": {
+      "event": "GENESIS",
+      "version": "V23",
+      "owner": "SLMK Jesse Martinez Junior"
+    },
+    "prev_hash": "92038cafccc7192535bd475cca985d03000d89962b8dc96f6664081663559b1b",
+    "block_hash": "cdb4998599277cfcf47d3c2fb23ac9a070926fa5125b59912fd4fa9c2628a83a6e3f018c269e6eb8df7a9442141eb4184a2e4dc3e3d0a3efa2773bd3565ad3d3"
+  }
+]
