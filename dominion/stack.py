@@ -332,4 +332,22 @@ class DominionStack:
         return result
 
 
-dominion = DominionStack()
+# Lazy global for sandbox / import safety. Original eager init caused
+# import-time hangs under constrained runtimes. Identity and behavior
+# unchanged; first access still constructs the full DominionStack.
+_dominion_instance = None
+
+def _get_dominion():
+    global _dominion_instance
+    if _dominion_instance is None:
+        _dominion_instance = DominionStack()
+    return _dominion_instance
+
+class _DominionProxy:
+    """Transparent proxy so existing 'from dominion.stack import dominion' continues to work."""
+    def __getattr__(self, name):
+        return getattr(_get_dominion(), name)
+    def __call__(self, *a, **kw):
+        return _get_dominion()(*a, **kw)
+
+dominion = _DominionProxy()
