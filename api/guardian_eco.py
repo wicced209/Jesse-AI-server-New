@@ -111,13 +111,15 @@ _sentinel_ledger = []
 
 @guardian_router.get("/sentinel/scan")
 async def sentinel_scan():
-    """Real-time telemetry monitor scan."""
-    scan = {
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "monitoring": True,
-        "threat_score": 0,
-        "state": "NOMINAL",
-    }
+    """Real-time telemetry monitor scan.
+
+    v2 (2026-11-08): delegates to the Sentinel detection engine
+    (api/sentinel.py) — the score and state are computed from real
+    evaluated events, not hardcoded. The previous build returned a
+    constant NOMINAL/0 regardless of traffic.
+    """
+    from api.sentinel import sentinel_engine
+    scan = sentinel_engine.scan()
     _sentinel_ledger.append(scan)
     return JSONResponse(content=scan)
 
