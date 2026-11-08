@@ -72,6 +72,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# PQ chaos hardening (2026-11-08): security headers on every response,
+# tiered rate limiting, Ed25519 request-signing verification, and
+# audited auth failures. See api/hardening.py for the pillar map.
+from api.hardening import HardeningMiddleware
+app.add_middleware(HardeningMiddleware)
+
 app.include_router(admin_router)
 app.include_router(mesh_router)
 app.include_router(mesh_ws_router)
