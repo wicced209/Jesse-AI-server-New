@@ -108,6 +108,8 @@ from api.hyper_sync import router as hyper_sync_router
 app.include_router(hyper_sync_router)
 from api.networks import router as networks_router
 app.include_router(networks_router)
+from api.os_family import router as os_family_router
+app.include_router(os_family_router)
 
 
 class CommandRequest(BaseModel):
