@@ -156,6 +156,28 @@ def _ack_frame(recipient_id: str, status: str,
     }
 
 
+def _verify_frame_signature(sender_id: str, header: Dict[str, Any],
+                            ping_type: str, seq: Any) -> str:
+    """Pillar 4 (hardening plan, added 2026-11-08): WebSocket frame
+    signature verification. If the sender is an enrolled mesh node
+    (api/mesh.py registry) with a public key on record, the frame's
+    cryptographicSignature must verify over "senderId:seq:pingType"
+    under that key. Returns "valid", "invalid", or "unverified"
+    (sender not enrolled with a key — legacy terms-gated behavior)."""
+    try:
+        from api.mesh import NODES, _verify_signature
+    except Exception:
+        return "unverified"
+    node = NODES.get(sender_id)
+    if not node or not node.get("public_key"):
+        return "unverified"
+    signature = str(header.get("cryptographicSignature") or "")
+    if not signature:
+        return "invalid"
+    message = f"{sender_id}:{seq}:{ping_type}".encode()
+    return "valid" if _verify_signature(node["public_key"], message, signature) else "invalid"
+
+
 def handle_frame(frame: Dict[str, Any]) -> Dict[str, Any]:
     """Process one inbound RTSGP++ frame; return the response frame."""
     header = frame.get("header", {}) or {}
@@ -179,17 +201,27 @@ def handle_frame(frame: Dict[str, Any]) -> Dict[str, Any]:
             "payload": {"status": "DOMINION_TERMS_VIOLATION_QUARANTINED"},
         }
 
+    sig_state = _verify_frame_signature(sender_id, header, ping_type, seq)
+    if sig_state == "invalid":
+        return {
+            "header": header,
+            "payload": {"status": "SIGNATURE_INVALID_QUARANTINED",
+                        "signature_verified": False},
+        }
+
     # Register / refresh the node on any valid ping.
     register_or_update_node(sender_id, payload, header)
 
     if ping_type == "HEARTBEAT":
-        return _ack_frame(sender_id, "PONG_ACKNOWLEDGED", seq)
-    if ping_type == "DEEP_DIAGNOSTIC":
-        return _ack_frame(sender_id, "DIAGNOSTIC_ACKNOWLEDGED", seq)
-    if ping_type == "SYNC_REQUEST":
-        return _ack_frame(sender_id, "SYNC_ACKNOWLEDGED", seq)
-
-    return _ack_frame(sender_id, "UNKNOWN_PING_TYPE_ACKNOWLEDGED", seq)
+        response = _ack_frame(sender_id, "PONG_ACKNOWLEDGED", seq)
+    elif ping_type == "DEEP_DIAGNOSTIC":
+        response = _ack_frame(sender_id, "DIAGNOSTIC_ACKNOWLEDGED", seq)
+    elif ping_type == "SYNC_REQUEST":
+        response = _ack_frame(sender_id, "SYNC_ACKNOWLEDGED", seq)
+    else:
+        response = _ack_frame(sender_id, "UNKNOWN_PING_TYPE_ACKNOWLEDGED", seq)
+    response["payload"]["signature_verified"] = (sig_state == "valid")
+    return response
 
 
 # ---------------------------------------------------------------------------
