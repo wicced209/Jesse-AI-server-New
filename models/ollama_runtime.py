@@ -17,6 +17,9 @@ GEMINI_URL     = "https://generativelanguage.googleapis.com/v1beta/interactions"
 GROQ_API_KEY  = os.environ.get("GROQ_API_KEY", "")
 GROQ_URL      = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL    = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
+XAI_URL     = "https://api.x.ai/v1/chat/completions"
+XAI_MODEL   = os.environ.get("XAI_MODEL", "grok-4")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_URL     = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODEL   = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
@@ -46,7 +49,7 @@ JESSE_SYSTEM_FULL = (_V2_BOOT + "\n\n" + JESSE_SYSTEM) if _V2_BOOT else JESSE_SY
 def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: str = "") -> str:
     """
     Generate a response using Jesse AI's internal LLM.
-    Tries Ollama first (local), then Gemini, then Groq (free cloud), then OpenRouter, then stub. history: optional conversation history prepended to the prompt.
+    Tries Ollama first (local), then Gemini, then xAI (Grok), then Groq (free cloud), then OpenRouter, then stub. history: optional conversation history prepended to the prompt.
     """
     
     full_prompt = (history + "\n\n" + prompt) if history else prompt
@@ -98,6 +101,31 @@ def generate(prompt: str, model: str = LOCAL_MODEL, timeout: int = 60, history: 
             return result
         except Exception as e:
             log_event(f"[LLM] Gemini error: {e} — trying Groq", "warning")
+    # Try xAI (Grok — OpenAI-compatible chat completions)
+    if XAI_API_KEY:
+        try:
+            log_event(f"[LLM] Trying xAI model='{XAI_MODEL}'")
+            payload = json.dumps({
+                "model": XAI_MODEL,
+                "messages": [
+                    {"role": "system", "content": JESSE_SYSTEM_FULL},
+                    {"role": "user", "content": full_prompt}
+                ],
+                "max_tokens": 1024,
+            }).encode()
+            req = urllib.request.Request(XAI_URL, data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {XAI_API_KEY}",
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                })
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = json.loads(r.read())
+                result = data["choices"][0]["message"]["content"]
+                log_event(f"[LLM] xAI response ({len(result)} chars)")
+                return result
+        except Exception as e:
+            log_event(f"[LLM] xAI error: {e} — trying Groq", "warning")
     # Try Groq (free cloud Llama3)
     if GROQ_API_KEY:
         try:
