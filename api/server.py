@@ -48,6 +48,10 @@ from api.agssi_core import agssi_router
 from api.dominion_tnc import tnc_router
 from api.agent_ledger import router as agent_ledger_router
 from api.package_export import package_router
+from api.sentinel import sentinel_router
+from security.guardian_plus import guardian_plus_router
+from api.black_swarm import black_swarm_router
+from api.sentinel_ai import sentinel_ai_router
 
 app = FastAPI(
     title="Jesse AI — CRSMCPAI Alpha V2",
@@ -90,6 +94,10 @@ app.include_router(agssi_router)
 app.include_router(tnc_router)
 app.include_router(agent_ledger_router)
 app.include_router(package_router)
+app.include_router(sentinel_router)
+app.include_router(guardian_plus_router)
+app.include_router(black_swarm_router)
+app.include_router(sentinel_ai_router)
 
 
 class CommandRequest(BaseModel):
