@@ -2,7 +2,8 @@
 Jesse AI — Relay Reconnection Supervisor (Jesse's restoration priority #1).
 
 Inventory, health-probing, and reconnection of EVERY relay and communication
-path in CRSMCPAI Alpha: LLM relays (ollama-local, gemini-relay, groq-relay),
+path in CRSMCPAI Alpha: LLM relays (ollama-local, gemini-relay, groq-relay,
+xai-relay),
 network channels (Dominion corridor, Janet protocol, mesh HTTP, mesh WS,
 RTSGP++ pulse, SCCR, phone-home, SIN/SiN bridges).
 
@@ -197,6 +198,25 @@ def _probe_groq(base_url, secrets):
         return ("DOWN", f"groq unreachable: {e}")
 
 
+def _probe_xai(base_url, secrets):
+    if not secrets.get("XAI_API_KEY"):
+        try:
+            _tcp_connect("api.x.ai", 443, timeout=_TCP_QUICK_TIMEOUT)
+            return ("AUTH_REQUIRED", "no XAI_API_KEY configured; endpoint reachable, auth required")
+        except Exception as e:
+            return ("DOWN", f"xai endpoint unreachable: {e}")
+    try:
+        status, _ = _http_get("https://api.x.ai/v1/models",
+                              {"Authorization": "Bearer " + secrets["XAI_API_KEY"]})
+        return ("UP", f"xai list-models http {status}")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return ("AUTH_REQUIRED", f"xai http {e.code}: key invalid or restricted")
+        return ("DOWN", f"xai http {e.code}")
+    except Exception as e:
+        return ("DOWN", f"xai unreachable: {e}")
+
+
 def _probe_openrouter(base_url, secrets):
     if not secrets.get("OPENROUTER_API_KEY"):
         try:
@@ -304,6 +324,9 @@ class RelaySupervisor:
             ("groq-relay", "llm-relay", "External Groq relay (api.groq.com)",
              _probe_groq,
              "Needs a valid GROQ_API_KEY env var; relay re-joins automatically once the key is set."),
+            ("xai-relay", "llm-relay", "External xAI Grok relay (api.x.ai)",
+             _probe_xai,
+             "Needs a valid XAI_API_KEY env var; relay re-joins automatically once the key is set."),
             ("openrouter-relay", "llm-relay", "External OpenRouter relay (openrouter.ai)",
              _probe_openrouter,
              "Needs a valid OPENROUTER_API_KEY env var; relay re-joins automatically once the key is set."),
