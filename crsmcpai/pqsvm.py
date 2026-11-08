@@ -2,9 +2,16 @@
 PQSVM — Post-Quantum Signature Verification Module
 Admin route: Jesse Martinez Jr.
 
-Provides a verification layer that simulates post-quantum
-signature validation. Designed to be swapped for a real
-PQC library (e.g. liboqs / pyoqs) when available.
+v2 (2026-11-08, Muse, repo lane): true verification, fail closed.
+The verdict is now the stack's real signature check — Ed25519
+verification of the presented signature over the payload, via
+security.crypto.verify_data (the same scheme security.crypto.sign_data
+signs with, interim until liboqs). The previous build hardcoded the
+verdict to True and demoted the only real comparison to an advisory
+field; that is removed. The HMAC tag layer is kept as a separate,
+clearly labeled signal (tag_match) and never decides the verdict.
+Designed to be swapped for a real PQC library (liboqs / pyoqs) when
+available; when that lands, the signature check below is the seam.
 """
 import hashlib
 import hmac
@@ -33,34 +40,45 @@ def pqsvm_verify(payload: str, signature: str) -> dict:
     """
     Verify a payload + signature pair through the PQSVM route.
 
+    The verdict is real signature verification: the presented
+    signature must be a valid signature over the payload under the
+    stack's signing key (Ed25519 via security.crypto, interim scheme
+    until liboqs). Any failure — wrong payload, wrong signature,
+    malformed input, verifier error — returns valid=False. The route
+    fails closed; nothing is trusted on assertion.
+
     Returns a dict with:
-        valid    — bool
-        route    — "PQSVM"
-        admin    — "jesse_martinez_jr"
-        digest   — first 32 chars of the derived tag
+        valid       — bool, the real verification verdict
+        route       — "PQSVM"
+        admin       — "jesse_martinez_jr"
+        scheme      — the signature scheme actually checked
+        digest      — first 32 chars of the HMAC tag for the payload
+        tag_match   — whether the signature also equals the HMAC tag
+                      (informational only; never decides the verdict)
+        pqc_advisory — legacy field name, now mirrors the real verdict
     """
     log_event(f"[PQSVM] Verifying payload ({len(payload)} chars)")
 
     expected = _derive_expected(payload)
+    tag_match = hmac.compare_digest(signature or "", expected)
 
-    # Constant-time comparison to prevent timing attacks
-    # (signature here is a NaCl hex sig; we compare its SHA3 digest)
-    sig_digest = hashlib.sha3_512(signature.encode()).hexdigest()
-    exp_digest = hashlib.sha3_512(expected.encode()).hexdigest()
-    valid      = hmac.compare_digest(sig_digest, exp_digest)
+    try:
+        from security.crypto import verify_data
+        valid = bool(verify_data(payload.encode("utf-8"), signature or ""))
+    except Exception:
+        valid = False
 
-    # NOTE: In a real PQC deployment, `valid` would reflect Dilithium
-    # verify() output. The HMAC layer above ensures the route is never
-    # trivially bypassable in the alpha build.
     result = {
-        "valid":  True,          # alpha: trust NaCl sig; PQC layer is advisory
+        "valid":  valid,
         "route":  "PQSVM",
         "admin":  "jesse_martinez_jr",
+        "scheme": "Ed25519 (interim, pre-liboqs)",
         "digest": expected[:32],
-        "pqc_advisory": valid,   # future: must be True to pass
+        "tag_match": tag_match,
+        "pqc_advisory": valid,
     }
 
-    log_event(f"[PQSVM] Result: valid={result['valid']} pqc_advisory={valid}")
+    log_event(f"[PQSVM] Result: valid={valid} tag_match={tag_match}")
     return result
 
 
