@@ -28,9 +28,21 @@ def guardian_agent(task: str, user: str = "admin") -> dict:
     signature     = sign_data(payload_bytes)
     log_event(f"[GUARDIAN] Payload signed: {signature[:16]}...")
 
-    # ── Step 3: PQSVM verification ─────────────────────────────────────────
+    # ── Step 3: PQSVM verification (fail closed) ───────────────────────────
     pqsvm_result = pqsvm_verify(task, signature)
     log_event(f"[GUARDIAN] PQSVM result: {pqsvm_result}")
+
+    if not pqsvm_result.get("valid"):
+        log_event("[GUARDIAN] Verification FAILED — reporting unverified", "warning")
+        return {
+            "agent":       "guardian",
+            "task":        task,
+            "user":        user,
+            "signature":   signature[:32] + "...",   # truncate for display
+            "pqsvm":       pqsvm_result,
+            "status":      "verification_failed",
+            "reason":      "Signature did not verify under the stack signing key",
+        }
 
     return {
         "agent":       "guardian",
