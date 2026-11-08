@@ -201,6 +201,43 @@ def create_event(payload: dict) -> dict:
         return block
 
 
+def import_block(block: dict) -> bool:
+    """Append a block received from a peer, preserving its original
+    hash (hyper sync reconciliation). The block is accepted only if
+    it extends the current head exactly and its stored hash recomputes
+    correctly; anything else is refused and nothing is written. This
+    is the ledger's only foreign-block path — create_event remains the
+    only way new local blocks are minted."""
+    with _append_lock:
+        chain = _get_chain()
+        if block.get("index") != len(chain):
+            return False
+        expected_prev = chain[-1]["block_hash"] if chain else GENESIS
+        if block.get("prev_hash") != expected_prev:
+            return False
+        check = {k: v for k, v in block.items() if k not in ("block_hash", "hash")}
+        expected = hashlib.sha3_512(
+            json.dumps(check, sort_keys=True).encode()
+        ).hexdigest()
+        if block.get("block_hash") != expected:
+            return False
+        block = dict(block)
+        block["hash"] = block["block_hash"]
+        if DATABASE_URL:
+            if not _save_pg(block):
+                return False
+            _ledger_cache.clear()
+            _ledger_cache.extend(chain)
+            _ledger_cache.append(block)
+            return True
+        if chain is not _ledger_cache:
+            _ledger_cache.clear()
+            _ledger_cache.extend(chain)
+        _ledger_cache.append(block)
+        _save_file(list(_ledger_cache))
+        return True
+
+
 def get_ledger() -> list:
     return list(_get_chain())
 
