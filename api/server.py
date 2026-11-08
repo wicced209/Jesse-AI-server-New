@@ -104,6 +104,8 @@ app.include_router(sentinel_router)
 app.include_router(guardian_plus_router)
 app.include_router(black_swarm_router)
 app.include_router(sentinel_ai_router)
+from api.hyper_sync import router as hyper_sync_router
+app.include_router(hyper_sync_router)
 
 
 class CommandRequest(BaseModel):
