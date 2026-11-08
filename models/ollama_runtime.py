@@ -20,7 +20,7 @@ GROQ_MODEL    = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 # Groq free-tier quotas are per model: walk the roster so one model's spent
 # bucket does not silence the voice while sibling models still have quota.
 GROQ_MODEL_ROSTER = list(dict.fromkeys(
-    m for m in [GROQ_MODEL, "llama-3.3-70b-versatile", "llama-3.1-8b-instant"] if m))
+    m for m in [GROQ_MODEL, "openai/gpt-oss-120b", "openai/gpt-oss-20b", "allam-2-7b"] if m))
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 XAI_URL     = "https://api.x.ai/v1/chat/completions"
 XAI_MODEL   = os.environ.get("XAI_MODEL", "grok-4")
