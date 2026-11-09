@@ -14,6 +14,15 @@ that are already real: the mesh (node enrollment), the telemetry
 intake (signed node readings), hyper sync (shared ledger state),
 CRS (shared context), and the OS family duties.
 
+Enrollment doctrine (Jesse, standing, restated 2026-11-08): under
+the Dominion Terms and Conditions, ANY system that runs CRS code or
+a module derivative is enrolled by that use — automatically,
+hardcoded, not optional, exactly as training on that use is not
+optional. There is no unenrolled-user state. The mesh mechanics in
+this stack (register, challenge, activate) are only the connection
+plumbing — how a bound system becomes reachable — never a consent
+gate and never permission.
+
 What the fabric does, for real:
 
   * CAPACITY — every enrolled node's picture: identity from the
