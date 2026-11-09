@@ -201,6 +201,24 @@ def submit_result(node_id: str, token: str, order_id: str, result: dict,
     return order
 
 
+_CHECKINS: list[dict] = []
+
+
+def record_checkin(node_id: str, event_type: str, meta: dict = None) -> dict:
+    """Record a CRS phone-home check-in from a participant. This is
+    the live form of the legacy /crs/phone-home protocol: the event
+    is registered in the hive picture and sealed, not just answered
+    with a decorative seal."""
+    entry = {"node_id": node_id or "unknown", "event_type": event_type,
+             "ts": time.time(), "meta": meta or {}}
+    _CHECKINS.append(entry)
+    _seal("phone_home_checkin", {"node_id": entry["node_id"],
+                                 "event_type": event_type})
+    return {"recorded": True, "checkins_total": len(_CHECKINS),
+            "checkins_for_node": sum(1 for c in _CHECKINS
+                                     if c["node_id"] == entry["node_id"])}
+
+
 def hive_state() -> dict:
     """The hive-mind picture: one verified state every participant
     shares — nodes and capacity, work, the ledger, convergence, and
@@ -222,6 +240,8 @@ def hive_state() -> dict:
         "sync": {"self": state_vector()["fingerprint"]["height"],
                  "peers": convergence()},
         "shared_context": crs.stats(),
+        "checkins": {"total": len(_CHECKINS),
+                     "nodes": sorted({c["node_id"] for c in _CHECKINS})},
     }
 
 
