@@ -307,9 +307,26 @@ def bridge_probe(name: str) -> Dict[str, Any]:
     """Small measured fact for api/networks.py binding, probed live.
     Deliberately cheap: no AGSSI reasoning call is made here."""
     if name == "solva_navigation_engine":
-        from api.networks import all_networks
-        nets = all_networks()["networks"]
-        return {"surfaces": sorted(nets), "solva_bound_live": nets.get("solva", {}).get("bound_live")}
+        # Cheap and non-recursive by design: this probe is CALLED by
+        # api.networks.all_networks() (via _make_bridge_probe), so it
+        # must never call all_networks() or anything that probes the
+        # bridge layer — that was an unbounded recursion (each level
+        # re-probed all six bridges, with mesh/ledger work per level).
+        # Surfaces are the network names declared in the _NETWORKS
+        # registry constant in api/networks.py, read without invoking
+        # all_networks(); the two counts are len() over in-memory
+        # registries whose accessors invoke no handlers and probe
+        # nothing (verified: SOLVA_MODULES is a plain dict built at
+        # import; mcp.list_handlers() only formats its registry dict).
+        # The old "solva_bound_live" field is dropped: the only source
+        # for it was all_networks() itself.
+        from api.networks import _NETWORKS
+        from crsmcpai.module_context_protocol import mcp
+        from solva_modules.family import SOLVA_MODULES
+        return {"surfaces": sorted(_NETWORKS),
+                "network_count": len(_NETWORKS),
+                "solva_family_modules": len(SOLVA_MODULES),
+                "mcp_handlers": len(mcp.list_handlers())}
     if name == "solva_health_bridge":
         h = _duty_health({})
         return {"overall": h.get("overall"), "components": sorted(h.get("components", {}))}
