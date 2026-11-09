@@ -110,6 +110,8 @@ from api.networks import router as networks_router
 app.include_router(networks_router)
 from api.os_family import router as os_family_router
 app.include_router(os_family_router)
+from api.logic import router as logic_router
+app.include_router(logic_router)
 
 
 class CommandRequest(BaseModel):
