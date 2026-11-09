@@ -13,16 +13,33 @@ Nothing is ever deleted. A small ledger seal (EXECUTION_RECORDED) makes
 each record tamper-evident against the golden chain without bloating the
 chain with megabyte payloads. Recording never fails a command: every
 failure is logged as a warning and swallowed by the caller.
+
+v2: Mid-run empty-store fix (2026-11-08, Muse, repo lane).
+    v1 cached its Postgres connection forever and, when any Postgres
+    operation failed, silently fell through to the in-memory list —
+    which a freshly restarted process has never hydrated from Postgres.
+    When the host closed the idle connection mid-run (Neon does this),
+    every read suddenly reported an empty store even though all records
+    were intact in Postgres, and writes degraded to memory-only with
+    fabricated ids. v2 mirrors memory/ledger.py v7: a failed operation
+    drops the cached connection and retries once with a fresh one, so a
+    dead connection heals on the next call instead of failing forever;
+    appends are serialized under a lock and verified by the RETURNING
+    id; the in-memory list is only a write-through cache of this
+    process's own records and is consulted only when Postgres is not
+    configured or stays unreachable through the retry.
 """
 import hashlib
 import json
 import os
+import threading
 import time
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 _pg_conn = None
 _mem_store: list = []
+_lock = threading.Lock()
 
 
 def _pg():
@@ -55,6 +72,18 @@ def _pg():
     except Exception:
         _pg_conn = None
         return None
+
+
+def _drop_conn():
+    """Drop the cached connection after a failure so the next call
+    retries with a fresh one instead of failing forever (ledger v7)."""
+    global _pg_conn
+    try:
+        if _pg_conn is not None:
+            _pg_conn.close()
+    except Exception:
+        pass
+    _pg_conn = None
 
 
 def _response_hash(stack_execution, build_result, jesse_ai_response, spoken_response):
@@ -90,6 +119,46 @@ def _row_to_record(r):
     }
 
 
+def _insert_pg(record):
+    """Insert one record into Postgres. Return the new row id, or None.
+
+    On failure the cached connection is dropped and the insert is
+    retried once with a fresh connection (ledger v7 discipline). The
+    append counts as written only when RETURNING yields the row id.
+    """
+    last_err = None
+    for _attempt in range(2):
+        conn = _pg()
+        if conn is None:
+            return None
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO executions (ts, username, kind, command, ledger_index, "
+                    "stack_execution, build_result, jesse_ai_response, spoken_response, response_hash) "
+                    "VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s) RETURNING id",
+                    (record["ts"], record["username"], record["kind"],
+                     record["command"], record["ledger_index"],
+                     json.dumps(record["stack_execution"], default=str)
+                     if record["stack_execution"] is not None else None,
+                     json.dumps(record["build_result"], default=str)
+                     if record["build_result"] is not None else None,
+                     record["jesse_ai_response"], record["spoken_response"],
+                     record["response_hash"]),
+                )
+                row = cur.fetchone()
+            if row is not None:
+                return row[0]
+            return None
+        except Exception as e:
+            last_err = e
+            _drop_conn()
+    if last_err is not None:
+        from core.logger import log_event
+        log_event(f"[EXECUTIONS] Postgres insert failed: {last_err}", "warning")
+    return None
+
+
 def record_execution(username, kind, command, ledger_index=None,
                      stack_execution=None, build_result=None,
                      jesse_ai_response=None, spoken_response=None):
@@ -111,25 +180,12 @@ def record_execution(username, kind, command, ledger_index=None,
         "spoken_response": spoken_response,
         "response_hash": response_hash,
     }
-    conn = _pg()
-    if conn is not None:
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO executions (ts, username, kind, command, ledger_index, "
-                    "stack_execution, build_result, jesse_ai_response, spoken_response, response_hash) "
-                    "VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s) RETURNING id",
-                    (ts, username, kind, command, ledger_index,
-                     json.dumps(stack_execution, default=str) if stack_execution is not None else None,
-                     json.dumps(build_result, default=str) if build_result is not None else None,
-                     jesse_ai_response, spoken_response, response_hash),
-                )
-                record["id"] = cur.fetchone()[0]
-        except Exception as e:
-            log_event(f"[EXECUTIONS] Postgres insert failed: {e}", "warning")
-    if record["id"] is None:
-        record["id"] = len(_mem_store) + 1
-    _mem_store.append(record)
+    with _lock:
+        if DATABASE_URL:
+            record["id"] = _insert_pg(record)
+        if record["id"] is None:
+            record["id"] = len(_mem_store) + 1
+        _mem_store.append(record)
     try:
         from memory.ledger import create_event
         create_event({
@@ -158,11 +214,16 @@ def _filters(kind, since_block, until_block):
     return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
 
 
-def list_executions(limit=50, offset=0, kind=None, since_block=None, until_block=None):
-    """Paginated execution index, oldest first. Returns (total, rows)."""
-    where, params = _filters(kind, since_block, until_block)
-    conn = _pg()
-    if conn is not None:
+def _list_pg(where, params, limit, offset):
+    """One paginated Postgres read, or None if Postgres is unavailable.
+
+    On failure the cached connection is dropped and the read is retried
+    once with a fresh connection before giving up.
+    """
+    for _attempt in range(2):
+        conn = _pg()
+        if conn is None:
+            return None
         try:
             with conn.cursor() as cur:
                 cur.execute("SELECT COUNT(*) FROM executions" + where, params)
@@ -175,7 +236,21 @@ def list_executions(limit=50, offset=0, kind=None, since_block=None, until_block
                 )
                 return total, [_row_to_record(r) for r in cur.fetchall()]
         except Exception:
-            pass
+            _drop_conn()
+    return None
+
+
+def list_executions(limit=50, offset=0, kind=None, since_block=None, until_block=None):
+    """Paginated execution index, oldest first. Returns (total, rows)."""
+    where, params = _filters(kind, since_block, until_block)
+    if DATABASE_URL:
+        with _lock:
+            result = _list_pg(where, params, limit, offset)
+        if result is not None:
+            return result
+        # Postgres is configured but stayed unreachable through the
+        # retry. Fall back only to this process's own write-through
+        # cache — never present it as the store while Postgres answers.
     rows = list(_mem_store)
     if kind:
         rows = [r for r in rows if r["kind"] == kind]
@@ -186,10 +261,17 @@ def list_executions(limit=50, offset=0, kind=None, since_block=None, until_block
     return len(rows), rows[offset:offset + limit]
 
 
-def get_execution(exec_id):
-    """One full execution record by id, or None."""
-    conn = _pg()
-    if conn is not None:
+def _get_pg(exec_id):
+    """One Postgres record by id: (found, record_or_None).
+
+    found=False means Postgres could not be read at all (after the
+    drop-and-retry), so the caller may consult the in-memory cache;
+    found=True with None means Postgres answered and has no such row.
+    """
+    for _attempt in range(2):
+        conn = _pg()
+        if conn is None:
+            return False, None
         try:
             with conn.cursor() as cur:
                 cur.execute(
@@ -199,10 +281,26 @@ def get_execution(exec_id):
                     (exec_id,),
                 )
                 row = cur.fetchone()
-            if row is not None:
-                return _row_to_record(row)
+            return True, (_row_to_record(row) if row is not None else None)
         except Exception:
-            pass
+            _drop_conn()
+    return False, None
+
+
+def get_execution(exec_id):
+    """One full execution record by id, or None."""
+    if DATABASE_URL:
+        with _lock:
+            found, record = _get_pg(exec_id)
+        if found:
+            if record is not None:
+                return record
+            # Postgres answered and has no such row; the row may still
+            # be a cache-only record from a Postgres outage window.
+            for r in _mem_store:
+                if r["id"] == exec_id:
+                    return r
+            return None
     for r in _mem_store:
         if r["id"] == exec_id:
             return r
