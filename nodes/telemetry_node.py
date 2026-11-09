@@ -76,6 +76,22 @@ def _canon(obj):
     return json.dumps(obj, sort_keys=True, separators=(",", ":"))
 
 
+def merkle_root(hashes):
+    """Mirror of the hub's api.hyper_sync.merkle_root — the hub
+    recomputes and compares, so this must match exactly."""
+    if not hashes:
+        return hashlib.sha3_256(b"").hexdigest()
+    level = list(hashes)
+    while len(level) > 1:
+        nxt = []
+        for i in range(0, len(level), 2):
+            left = level[i]
+            right = level[i + 1] if i + 1 < len(level) else level[i]
+            nxt.append(hashlib.sha3_256(f"{left}:{right}".encode()).hexdigest())
+        level = nxt
+    return level[0]
+
+
 def sign_batch(secret_value, source_id, sequence, timestamp, events):
     body = {"source_id": source_id, "sequence": sequence,
             "timestamp": timestamp, "events": events}
@@ -228,6 +244,48 @@ class TelemetryNode:
             self.batches_acked += 1
         return resp
 
+    # ── Sovereign OS compute fabric: work orders ───────────────────
+
+    def _fabric_headers(self):
+        return {"x-node-id": self.node_id,
+                "x-node-token": self.state.get("mesh_token", "")}
+
+    def execute_order(self, order):
+        """Execute one work order from the Sovereign OS fabric.
+        Kinds mirror api/compute_fabric.py; the hub recomputes
+        hash_check and merkle_segment results before accepting
+        them, so this math must match the hub's exactly."""
+        kind = order["kind"]
+        params = order.get("params") or {}
+        if kind == "host_probe":
+            return {**host_readings(), **self.measure_link()}
+        if kind == "hash_check":
+            data = str(params.get("data", "")).encode()
+            return {"sha3_512": hashlib.sha3_512(data).hexdigest()}
+        if kind == "merkle_segment":
+            return {"merkle_root": merkle_root(list(params.get("hashes", [])))}
+        if kind == "echo":
+            return {"echo": params}
+        raise ValueError(f"unsupported work kind '{kind}'")
+
+    def do_work(self):
+        """Poll the fabric once; execute and report any order."""
+        code, resp = http_json("GET", f"{self.base}/sovereign-os/work-orders/poll",
+                               headers=self._fabric_headers())
+        order = (resp or {}).get("order")
+        if not order:
+            return None
+        try:
+            result = self.execute_order(order)
+            payload = {"order_id": order["order_id"], "result": result}
+        except Exception as exc:
+            payload = {"order_id": order["order_id"],
+                       "error": f"{type(exc).__name__}: {exc}"}
+        code, resp = http_json("POST", f"{self.base}/sovereign-os/work-orders/result",
+                               payload, headers=self._fabric_headers())
+        print(f"[node] work order {order['order_id']} ({order['kind']}): {resp}")
+        return resp
+
     def run(self, interval, count):
         mesh = self.enroll_mesh()
         print(f"[node] mesh enrollment: {mesh}")
@@ -237,6 +295,7 @@ class TelemetryNode:
         while count == 0 or sent < count:
             resp = self.send_batch()
             print(f"[node] batch {sent + 1}: {resp}")
+            self.do_work()
             sent += 1
             if count == 0 or sent < count:
                 time.sleep(interval)
