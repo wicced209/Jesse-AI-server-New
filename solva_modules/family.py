@@ -21,11 +21,14 @@ performed against the live stack component it names:
   011 builder_agent    the real sandbox builder agent
   012 guardian_agent   the real guardian agent (PQSVM v2 inside)
   013 mesh_connector   the live mesh registry
-  014 tts_bridge       capability report — no TTS engine is
-                       integrated; reported honestly, never faked
-  015 whisper_parser   capability report — Groq's whisper models
-                       are on the account roster, but no
-                       transcription route is wired; honest report
+  014 tts_bridge       speech route report — POST /voice/speak
+                       (Groq Orpheus, verified 2026-11-09) is wired
+                       in api/voice_routes.py; configured state is
+                       read live from the environment
+  015 whisper_parser   transcription route report — POST
+                       /voice/transcribe (Groq whisper-large-v3) is
+                       wired in api/voice_routes.py; configured
+                       state is read live from the environment
   016 admin_console    owner identity + license registry state
   017 telemetry_sensor the telemetry intake's real status
   018 sandbox_runner   real sandboxed code execution
@@ -51,6 +54,7 @@ of the module's operation count and duty — deterministic per
 operation, not random decoration.
 """
 import hashlib
+import os
 import time
 from core.config import SOVEREIGN_OWNER
 from core.logger import log_event
@@ -157,17 +161,30 @@ def _duty_mesh(payload):
 
 
 def _duty_tts(payload):
-    return {"integrated": False,
-            "reason": "no text-to-speech engine is wired into the stack; "
-                      "speech output today is the client's screen reader. "
-                      "Reported honestly rather than faked."}
+    configured = bool(os.environ.get("GROQ_API_KEY"))
+    return {"integrated": True,
+            "route": "POST /voice/speak",
+            "provider": "Groq Orpheus (api/voice_routes.py)",
+            "model": "canopylabs/orpheus-v1-english",
+            "configured": configured,
+            "max_chars_per_request": 200,
+            "note": "route is wired in the server; calls return an honest "
+                    "groq_not_configured error when no key is present in "
+                    "the process" if not configured else
+                    "route is wired and a Groq key is configured in this process"}
 
 
 def _duty_whisper(payload):
-    return {"integrated": False,
-            "reason": "whisper-large-v3 is on the Groq account roster, but "
-                      "no transcription route is wired in the stack yet. "
-                      "Reported honestly rather than faked."}
+    configured = bool(os.environ.get("GROQ_API_KEY"))
+    return {"integrated": True,
+            "route": "POST /voice/transcribe",
+            "provider": "Groq (OpenAI-compatible audio endpoint, api/voice_routes.py)",
+            "model": "whisper-large-v3",
+            "configured": configured,
+            "note": "route is wired in the server; calls return an honest "
+                    "groq_not_configured error when no key is present in "
+                    "the process" if not configured else
+                    "route is wired and a Groq key is configured in this process"}
 
 
 def _duty_admin(payload):
