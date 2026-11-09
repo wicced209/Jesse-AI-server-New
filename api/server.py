@@ -114,6 +114,10 @@ from api.logic import router as logic_router
 app.include_router(logic_router)
 from api.hud import hud_router
 app.include_router(hud_router)
+from api.solva_bridges import solva_bridges_router
+app.include_router(solva_bridges_router)
+from api.voice_routes import voice_router
+app.include_router(voice_router)
 from api.compute_fabric import router as compute_fabric_router
 app.include_router(compute_fabric_router)
 from api.kernel_modules import router as kernel_modules_router
