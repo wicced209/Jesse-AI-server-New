@@ -112,6 +112,8 @@ from api.os_family import router as os_family_router
 app.include_router(os_family_router)
 from api.logic import router as logic_router
 app.include_router(logic_router)
+from api.compute_fabric import router as compute_fabric_router
+app.include_router(compute_fabric_router)
 
 
 class CommandRequest(BaseModel):
