@@ -114,6 +114,8 @@ from api.logic import router as logic_router
 app.include_router(logic_router)
 from api.compute_fabric import router as compute_fabric_router
 app.include_router(compute_fabric_router)
+from api.kernel_modules import router as kernel_modules_router
+app.include_router(kernel_modules_router)
 
 
 class CommandRequest(BaseModel):
@@ -2566,6 +2568,27 @@ async def family_nufire_operate(name: str, request: Request,
         return denied
     from nufire_family import get_module
     mod = get_module(name)
+    if not mod:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    return mod.operate(body)
+
+
+@app.post("/family/solva/{name}/operate")
+async def family_solva_operate(name: str, request: Request,
+                               x_user: str = Header(default="")):
+    # Owner-guarded, same as the NUFIRE operate route: stranger
+    # authority stays zero. Added 2026-11-08 with the SOLVA behavior
+    # edition, so the modules' real duties are reachable live.
+    denied = _device_header_auth(x_user)
+    if denied is not None:
+        return denied
+    from solva_modules.family import SOLVA_MODULES
+    mod = next((m for m in SOLVA_MODULES.values()
+                if m.module_id == name or m.name == name), None)
     if not mod:
         return JSONResponse({"error": "not found"}, status_code=404)
     try:
