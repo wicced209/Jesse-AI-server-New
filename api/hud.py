@@ -69,16 +69,17 @@ def hud_state() -> dict:
 
     try:
         from memory.executions import list_executions
-        recent = list_executions(limit=5)
-        all_recent = list_executions(limit=200)
+        total, _ = list_executions(1, 0)
+        _, rows = list_executions(200, max(0, total - 200))
         by_kind: dict = {}
-        for rec in all_recent:
+        for rec in rows:
             by_kind[rec["kind"]] = by_kind.get(rec["kind"], 0) + 1
+        latest = list(reversed(rows[-5:]))
         state["orders"] = {
-            "total": len(all_recent), "by_kind": by_kind,
+            "total": total, "by_kind": by_kind,
             "latest": [{"id": r["id"], "kind": r["kind"],
                         "sealed_at_block": r.get("ledger_index"),
-                        "at": _when(r["ts"])} for r in recent],
+                        "at": _when(r["ts"])} for r in latest],
         }
     except Exception as exc:
         state["orders"] = {"unavailable": str(exc)[:120]}
@@ -112,10 +113,12 @@ def hud_state() -> dict:
         from api.os_family import family_status
         fam = family_status()["family"]
         state["os_family"] = {
-            "active": [k for k, v in fam.items()
-                       if v.get("status") == "ACTIVE"],
-            "not_active": {k: v.get("status") for k, v in fam.items()
-                           if v.get("status") != "ACTIVE"},
+            "passed": [k for k, v in fam.items()
+                       if v.get("last_passed") is True],
+            "failed": [k for k, v in fam.items()
+                       if v.get("last_passed") is False],
+            "unchecked": [k for k, v in fam.items()
+                          if v.get("last_passed") is None],
             "total": len(fam),
         }
     except Exception as exc:
@@ -123,10 +126,11 @@ def hud_state() -> dict:
 
     try:
         from api.networks import all_networks
-        nets = all_networks()
+        nets = all_networks()["networks"]
         state["networks"] = {
-            key: {"live": val["live"], "total": val["total"]}
-            for key, val in nets.items()}
+            key: {"live": val["bound_live"],
+                  "total": val["declared_modules"]}
+            for key, val in nets.items() if "error" not in val}
     except Exception as exc:
         state["networks"] = {"unavailable": str(exc)[:120]}
 
@@ -218,15 +222,27 @@ def hud_briefing_text() -> str:
     if "unavailable" in fam:
         lines.append("The operating system family could not be "
                      "checked just now.")
-    elif fam["not_active"]:
-        names = ", ".join(fam["not_active"].keys())
+    elif fam["failed"]:
         lines.append(
             f"Of the {fam['total']} operating systems, "
-            f"{len(fam['active'])} are fully active. "
-            f"Not fully active: {names}.")
+            f"{len(fam['passed'])} passed their duty checks and "
+            f"{len(fam['failed'])} failed: "
+            f"{', '.join(fam['failed'])}.")
+    elif fam["unchecked"] and not fam["passed"]:
+        lines.append(
+            f"The {fam['total']} operating systems are dormant "
+            f"since the last restart and their duty checks have "
+            f"not run yet this session.")
+    elif fam["unchecked"]:
+        lines.append(
+            f"Of the {fam['total']} operating systems, "
+            f"{len(fam['passed'])} passed their duty checks; "
+            f"{len(fam['unchecked'])} have not been re-checked "
+            f"this session.")
     else:
         lines.append(
-            f"All {fam['total']} operating systems are fully active.")
+            f"All {fam['total']} operating systems passed their "
+            f"duty checks.")
 
     nets = s.get("networks", {})
     if "unavailable" not in nets:
