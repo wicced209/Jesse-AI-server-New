@@ -102,6 +102,13 @@ def _p_voice():
             "xai_configured": bool(os.environ.get("XAI_API_KEY"))}
 
 
+def _make_bridge_probe(bridge_name):
+    def _probe():
+        from api.solva_bridges import bridge_probe
+        return bridge_probe(bridge_name)
+    return _probe
+
+
 def _p_os_hub():
     from api.os_orchestrator import module_status
     return module_status()
@@ -160,12 +167,18 @@ SIN_BINDINGS: Dict[str, tuple] = {
 
 SOLVA_BINDINGS: Dict[str, tuple] = {
     "solva_voice_engine": ("Relay voice chain (Groq/OpenRouter rosters)", _p_voice),
-    "solva_navigation_engine": (None, None),
-    "solva_health_bridge": (None, None),
-    "solva_education_bridge": (None, None),
-    "solva_science_bridge": (None, None),
-    "solva_rights_engine": (None, None),
-    "solva_emergency_interface": (None, None),
+    "solva_navigation_engine": ("SOLVA bridges behavior layer (api/solva_bridges.py)",
+                                _make_bridge_probe("solva_navigation_engine")),
+    "solva_health_bridge": ("SOLVA bridges behavior layer (api/solva_bridges.py)",
+                            _make_bridge_probe("solva_health_bridge")),
+    "solva_education_bridge": ("SOLVA bridges behavior layer (api/solva_bridges.py)",
+                               _make_bridge_probe("solva_education_bridge")),
+    "solva_science_bridge": ("SOLVA bridges behavior layer (api/solva_bridges.py)",
+                             _make_bridge_probe("solva_science_bridge")),
+    "solva_rights_engine": ("SOLVA bridges behavior layer (api/solva_bridges.py)",
+                            _make_bridge_probe("solva_rights_engine")),
+    "solva_emergency_interface": ("SOLVA bridges behavior layer (api/solva_bridges.py)",
+                                  _make_bridge_probe("solva_emergency_interface")),
     "solva_financial_access": ("x402 agent payment lane", lambda: {"lane": "api/x402_payments.py + agent ledger"}),
     "solva_render_interface": ("Procedural media engines", lambda: {"engines": "media synthesis, in-stack"}),
     "solva_sensor_interpreter": ("Telemetry intake (live sources)", _p_telemetry),
