@@ -6,7 +6,7 @@ Owner: SLMK Jesse Martinez Junior
 Built to supreme hyper immaculate God mode standards.
 Quad check quad validate: all 8 gates enforced.
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 from fastapi.responses import JSONResponse
 import hashlib
 import hmac
@@ -188,19 +188,30 @@ async def dominion_v7_modules():
 
 @crs_router.post("/phone-home")
 async def crs_phone_home(request: dict):
-    """Build phone-home event (INIT/EXECUTE/BUILD_TEST/HEARTBEAT)."""
+    """CRS phone-home (INIT/EXECUTE/BUILD_TEST/HEARTBEAT).
+
+    Modernized 2026-11-08: the legacy form of this endpoint answered
+    with a decorative seal and recorded nothing. The check-in is now
+    registered in the Sovereign OS hive picture and sealed to the
+    Golden Ledger through the compute fabric. The pq_seal field is
+    kept in its legacy format for protocol compatibility."""
     event_type = request.get("event_type", "HEARTBEAT").upper()
     if event_type not in ("INIT", "EXECUTE", "BUILD_TEST", "HEARTBEAT"):
         return JSONResponse(status_code=400, content={"error": "Invalid event type"})
     seal = hmac.new(
         GENESIS_HASH.encode(), event_type.encode(), hashlib.sha3_256
     ).hexdigest()[:32]
+    from api.compute_fabric import record_checkin
+    recorded = record_checkin(request.get("node_id", ""),
+                              event_type, request.get("meta") or {})
     return JSONResponse(content={
         "event": event_type,
         "pq_seal": seal,
         "alpha_target": "CRSMCPAI_ALPHA",
         "owner": "SLMK Jesse Martinez Junior",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "recorded": recorded["recorded"],
+        "checkins_total": recorded["checkins_total"],
     })
 
 
@@ -208,34 +219,70 @@ async def crs_phone_home(request: dict):
 
 @crs_router.post("/arbitrate")
 async def crs_arbitrate(request: dict):
-    """Sovereign arbitration: verify authority and route command."""
+    """Sovereign arbitration: verify authority and route command.
+
+    Modernized 2026-11-08: the legacy form returned authorized /
+    routed / block_sequenced as constants. Arbitration now runs the
+    real Guardian++ gate (owner authority, RBAC, velocity, Sentinel
+    feed); an allowed decision is sealed to the Golden Ledger and
+    the response carries the seal's real block index and hash as
+    the signature. A denied decision returns the gate's reasons."""
     identity = request.get("identity", "")
     command = request.get("command", "")
-    if identity != "SLMK Jesse Martinez Junior" and identity != "jesse_martinez_jr":
+    user = "jesse_martinez_jr" if identity in (
+        "SLMK Jesse Martinez Junior", "jesse_martinez_jr") else identity
+    from security.guardian_plus import guardian_plus
+    verdict = guardian_plus.validate(user, "CRS_ARBITRATE",
+                                     payload=command[:200],
+                                     source="crs-arbitrate")
+    if not verdict["allowed"]:
         return JSONResponse(status_code=403, content={
+            "authorized": False,
             "error": "UNAUTHORIZED_IDENTITY_MISMATCH",
+            "reasons": verdict["reasons"],
         })
-    sig = hashlib.sha256(f"{command}:{GENESIS_HASH}".encode()).hexdigest()[:32]
+    from memory.ledger import create_event
+    block = create_event({"system": "crs_core", "kind": "arbitration",
+                          "command": command[:200], "identity": identity})
+    index = block["index"]
     return JSONResponse(content={
         "authorized": True,
         "command": command,
-        "signature": sig,
+        "signature": block["hash"],
         "routed": True,
-        "block_sequenced": True,
+        "block_sequenced": index,
+        "override": verdict["override"],
     })
 
 
 # ── CRS Core: Hive Token ──
 
 @crs_router.get("/hive/token")
-async def hive_token():
-    """Generate sovereign HMAC-SHA3-512 token for module reconnection."""
-    token = hmac.new(
-        GENESIS_HASH.encode(), str(time.time()).encode(), hashlib.sha3_512
-    ).hexdigest()
+async def hive_token(holder: str = "module", x_user: str = Header(default="")):
+    """Issue a module-reconnection credential for the hive.
+
+    Modernized 2026-11-08: the legacy form handed an unverifiable
+    HMAC string to ANY caller — no identity check, nothing to verify
+    against, nothing revocable. The token is now a real credential
+    from the key/license registry (sole issuer: the owner), owner-
+    gated at this route, verifiable through the registry, and
+    revocable. The secret is shown exactly once, here."""
+    from security.auth import authenticate
+    if not authenticate(x_user):
+        return JSONResponse(status_code=403, content={
+            "error": "owner-only: hive credentials are issued by the "
+                     "sovereign owner alone"})
+    from api.key_license_registry import issue_credential
+    issued = issue_credential("key", holder, "hive_reconnect")
+    if not issued.get("ok"):
+        return JSONResponse(status_code=400, content={"error": issued.get("error")})
     return JSONResponse(content={
-        "token": token,
-        "token_length": len(token),
-        "algorithm": "HMAC-SHA3-512",
+        "credential_id": issued["cred_id"],
+        "token": issued["secret_shown_once"],
+        "proof": issued["proof"],
+        "holder": issued["holder"],
+        "scope": issued["scope"],
+        "algorithm": "registry credential (SHA3-512 hashed at rest)",
         "genesis_bound": True,
+        "revocable": True,
     })
