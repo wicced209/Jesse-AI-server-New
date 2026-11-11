@@ -261,6 +261,65 @@ def _spoken_response_for(command_text, stack_result, llm_response):
         return ""
 
 
+# ── Command-to-build dispatch (2026-11-11) ───────────────────────────────
+# Owner's standing standard: a command that tells Jesse AI to build
+# something must actually build it, not just seal as a command execution.
+# The routing lives here, inside the stack — the owner never needs a
+# special first word or a separate endpoint. Detection is conservative on
+# purpose: questions, status checks, and pull/retrieve orders never
+# dispatch; a plain order carrying a build verb and a named target does.
+_BUILD_VERBS = {
+    "build", "builds", "building", "construct", "constructs",
+    "implement", "implements", "create", "creates", "develop",
+    "develops", "write", "writes", "generate", "generates", "code",
+}
+_BUILD_TARGETS = {
+    "module", "modules", "function", "functions", "program", "programs",
+    "script", "scripts", "tool", "tools", "engine", "engines", "system",
+    "systems", "service", "services", "endpoint", "endpoints", "route",
+    "routes", "agent", "agents", "test", "tests", "code", "app", "apps",
+    "page", "pages", "feature", "features", "component", "components",
+    "class", "method", "methods", "file", "files", "everything",
+    "all", "this", "it", "one",
+}
+_QUESTION_FIRST = {
+    "what", "why", "how", "when", "where", "who", "which", "is", "are",
+    "do", "does", "can", "could", "would", "should", "did", "was",
+    "were", "have", "has",
+}
+_BUILD_NEGATIONS = (
+    "do not build", "don't build", "dont build", "never build",
+    "not build", "no building", "stop build",
+)
+
+
+def _build_intent(command_text):
+    """True when a command plainly orders a build. Never raises."""
+    try:
+        import re as _re
+        raw = str(command_text or "").strip()
+        if len(raw) < 15 or raw.endswith("?"):
+            return False
+        if raw.lower().startswith("please answer"):
+            return False
+        t = " " + _re.sub(r"[^a-z0-9' ]", " ", raw.lower()) + " "
+        t = _re.sub(r"\s+", " ", t)
+        words = t.split()
+        if words and words[0] in _QUESTION_FIRST:
+            return False
+        for neg in _BUILD_NEGATIONS:
+            if neg in t:
+                return False
+        wset = set(words)
+        if not (wset & _BUILD_VERBS):
+            return False
+        if not (wset & _BUILD_TARGETS):
+            return False
+        return True
+    except Exception:
+        return False
+
+
 @app.post("/command")
 @app.post("/mcp/command")
 @app.post("/crsmcpai")
@@ -303,7 +362,35 @@ async def command(req: CommandRequest):
         except Exception as e:
             log_event(f"[MEMORY] failed to store reply: {e}", "warning")
 
+    # Command-to-build dispatch: an owner command that plainly orders a
+    # build also runs the autonomous builder, and the build record rides
+    # on this same execution — never a seal without the build behind it.
+    # A build failure never fails the command; it is recorded honestly.
+    build_result = None
+    build_dispatched = False
+    if req.user == "jesse_martinez_jr" and _build_intent(req.command):
+        build_dispatched = True
+        try:
+            build_result = dominion.autonomous_build(req.command, req.user)
+        except Exception as e:
+            log_event(f"[BUILD-DISPATCH] autonomous build failed: {e}",
+                      "warning")
+            build_result = {"error": str(e), "all_ok": False, "steps": []}
+
     spoken_response = _spoken_response_for(req.command, stack_result, llm_response)
+    if build_dispatched and isinstance(build_result, dict):
+        try:
+            _steps = build_result.get("steps") or []
+            _done = build_result.get("steps_completed", 0)
+            _gate = (build_result.get("gate") or {}).get("verdict") \
+                or "not reported"
+            _note = (f"Build ran with this command. {_done} of "
+                     f"{len(_steps)} steps completed. "
+                     f"Quad gate verdict: {_gate}.")
+            spoken_response = (spoken_response + " " + _note).strip() \
+                if spoken_response else _note
+        except Exception:
+            pass
     # Oversight: persist the full execution so Muse can read it back complete
     # and unabridged. Recording never fails the command.
     try:
@@ -312,6 +399,7 @@ async def command(req: CommandRequest):
             req.user, "command", req.command,
             ledger_index=stack_result.get("ledger_index") if isinstance(stack_result, dict) else None,
             stack_execution=stack_result,
+            build_result=build_result,
             jesse_ai_response=llm_response,
             spoken_response=spoken_response,
         )
@@ -326,6 +414,8 @@ async def command(req: CommandRequest):
         "user": req.user,
         "owner": SOVEREIGN_OWNER,
         "stack_execution": stack_result,
+        "build_result": build_result,
+        "build_dispatched": build_dispatched,
         "jesse_ai_response": llm_response,
         "spoken_response": spoken_response,
         "status": "SUCCESS",
